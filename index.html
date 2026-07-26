@@ -149,14 +149,15 @@ function initApp(monday) {
   const PALETTE = ['#5c7cfa','#e64d8a','#f08c00','#2f9e44','#7048e8','#1098ad','#e03131','#5c940d','#1971c2','#c67c04','#9c36b5','#d6336c'];
 
   // ── Constantes de layout ──────────────────────────────────
-  const DAY_W   = 100;   // largura de cada coluna de dia (px)
-  const NAME_W  = 150;   // largura da coluna de nomes (px)
+  const DAY_W      = 115;  // largura de cada coluna de dia (px)
+  const NAME_W     = 150;  // largura da coluna de nomes (px)
+  const PX_PER_HS  = 16;   // pixels por unidade de HS (fixo, nunca espreme)
+  const GAP        = 5;    // espaço entre blocos empilhados (px)
   const WEEKS_BEFORE = 4;
   const WEEKS_AFTER  = 8;
   const TOTAL_DAYS   = (WEEKS_BEFORE + WEEKS_AFTER) * 7; // 84 dias renderizados
-  const WEEK_PX  = DAY_W * 7;  // 700px por semana
-  const PAD   = 3;
-  const ROW_H = 112; // altura fixa igual para todas as linhas (7 unidades × 16px)
+  const WEEK_PX  = DAY_W * 7;
+  const PAD = 4;
 
   let allData = [], personOrder = [], isAdmin = false;
   let selPerson = '';
@@ -339,6 +340,25 @@ function initApp(monday) {
   function render() {
     const days = getAllDays();
 
+    // ── Altura global uniforme ────────────────────────────────
+    // Calcula o maior empilhamento de HS num mesmo dia (em qualquer pessoa)
+    // para que TODAS as linhas tenham exatamente a mesma altura.
+    let globalMaxHs = 7;
+    const visData0 = selPerson ? allData.filter(p=>p.person===selPerson) : allData;
+    visData0.forEach(p => {
+      days.forEach(d => {
+        if(isBlocked(d)) return;
+        const ds = fmtD(d);
+        const sum = p.subitems.reduce((acc,sub) => {
+          const ss=fmtD(sub.range.start), se=fmtD(sub.range.end);
+          return ds>=ss && ds<=se ? acc+sub.hs : acc;
+        }, 0);
+        if(sum > globalMaxHs) globalMaxHs = sum;
+      });
+    });
+    // Altura da linha = soma máxima × px por unidade + espaços + padding
+    const ROW_H = PAD + globalMaxHs * PX_PER_HS + (Math.ceil(globalMaxHs/7)-1) * GAP + PAD;
+
     // Cabeçalho de dias agrupado por semana
     const dhi = document.getElementById('days-header-inner');
     dhi.innerHTML = '';
@@ -429,21 +449,20 @@ function initApp(monday) {
       const clusters={};
       blocks.forEach((b,i)=>{ const r=find(i); (clusters[r]=clusters[r]||[]).push(b); });
 
-      const availH=ROW_H-PAD*2;
       Object.values(clusters).forEach(cluster=>{
         const sum=cluster.reduce((acc,b)=>acc+b.sub.hs,0);
-        const over=sum>7; const scale=over?(7/sum):1;
+        const over=sum>7;
         let topOffset=PAD;
         cluster.forEach(({sub,colStart,colEnd})=>{
-          const blkH=Math.max(18,Math.round(availH*(sub.hs/7)*scale));
-          const left=colStart*DAY_W+2;
-          const width=(colEnd-colStart+1)*DAY_W-4;
+          const blkH = sub.hs * PX_PER_HS;          // tamanho fixo, nunca espreme
+          const left  = colStart*DAY_W + 3;
+          const width = (colEnd-colStart+1)*DAY_W - 6;
           const blk=document.createElement('div');
           blk.className='blk'+(over?' over':'');
           blk.style.cssText=`left:${left}px;width:${width}px;top:${topOffset}px;height:${blkH}px;background:${cliColor(sub.clientCode)};`;
-          const showSub=blkH>=26;
+          const showSub=blkH>=28;
           blk.innerHTML=`<div class="blk-job">${sub.jobName}</div>${showSub?`<div class="blk-tp">${sub.tipo} · HS ${sub.hs}</div>`:''}`;
-          topOffset+=blkH+2;
+          topOffset += blkH + GAP;
           blk.addEventListener('click',()=>{ monday.execute('openItemCard',{itemId:parseInt(sub.subId)}); });
           pdays.appendChild(blk);
         });
