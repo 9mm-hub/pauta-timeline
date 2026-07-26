@@ -15,10 +15,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #btn-today,#btn-refresh{background:#1a1a1a;border:1px solid #333;color:#ccc;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px}
 #btn-today:hover,#btn-refresh:hover{background:#2a2a2a}
 #btn-refresh{font-size:14px;padding:2px 8px}
-#btn-refresh.spinning{animation:spin .6s linear infinite}
-#fperson,#ftipo{background:#1a1a1a;border:1px solid #333;color:#ddd;padding:4px 8px;border-radius:6px;font-size:12px}
-#fsearch{background:#1a1a1a;border:1px solid #333;color:#ddd;padding:4px 8px;border-radius:6px;font-size:12px;width:140px}
+#refresh-icon{display:inline-block}
+#btn-refresh.spinning #refresh-icon{animation:spin .6s linear infinite}
+#fperson,#ftipo,#fsetor{background:#1a1a1a;border:1px solid #333;color:#ddd;padding:4px 8px;border-radius:6px;font-size:12px}
+#search-wrap{position:relative;display:flex;align-items:center}
+#fsearch{background:#1a1a1a;border:1px solid #333;color:#ddd;padding:4px 26px 4px 8px;border-radius:6px;font-size:12px;width:140px}
 #fsearch::placeholder{color:#555}
+#fsearch-clear{position:absolute;right:6px;background:none;border:none;color:#666;cursor:pointer;font-size:11px;display:none;padding:0;line-height:1}
+#fsearch-clear.visible{display:block}
+#fsearch-clear:hover{color:#ccc}
 .admin-only{display:none}
 #bcfg,#bpesos{background:#1a1a1a;border:1px solid #333;color:#ccc;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px}
 #bcfg:hover,#bpesos:hover{background:#2a2a2a}
@@ -118,9 +123,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button id="btn-today">Hoje</button>
     <button class="nav" id="bn">&#8594;</button>
     <span id="wlbl">–</span>
-    <button id="btn-refresh" title="Atualizar dados">↻</button>
-    <input type="text" id="fsearch" placeholder="🔍 Pesquisar job..."/>
+    <button id="btn-refresh" title="Atualizar dados"><span id="refresh-icon">↻</span></button>
+    <div id="search-wrap">
+      <input type="text" id="fsearch" placeholder="🔍 Pesquisar job..."/>
+      <button id="fsearch-clear" title="Limpar">✕</button>
+    </div>
     <select id="ftipo"><option value="">Todos os tipos</option></select>
+    <select id="fsetor"><option value="">Todos os setores</option></select>
     <select id="fperson" class="admin-only"><option value="">Todas as pessoas</option></select>
     <button id="bcfg" class="admin-only">&#128197; Feriados</button>
     <button id="bpesos" class="admin-only">&#9881; Pesos</button>
@@ -185,23 +194,32 @@ function initApp(monday) {
   const ADMIN_USER_ID = null;
   const DAYS_PT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
   const MON_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-  const PALETTE = ['#5c7cfa','#e64d8a','#f08c00','#2f9e44','#7048e8','#1098ad','#e03131','#5c940d','#1971c2','#c67c04','#9c36b5','#d6336c'];
+  // Paleta de 48 cores distintas via ângulo dourado — sem repetição visual
+  const PALETTE = (function(){
+    const out=[];
+    for(let i=0;i<48;i++){
+      const h=Math.round((i*137.508)%360);
+      const s=52+((i%4)*8);
+      const l=33+((i%3)*8);
+      out.push(`hsl(${h},${s}%,${l}%)`);
+    }
+    return out;
+  })();
 
   // ── Constantes de layout ──────────────────────────────────
-  const DAY_W      = 115;  // largura de cada coluna de dia (px)
-  const NAME_W     = 150;  // largura da coluna de nomes (px)
-  const PX_PER_HS  = 16;   // pixels por unidade de HS (fixo, nunca espreme)
-  const GAP        = 5;    // espaço entre blocos empilhados (px)
+  const DAY_W      = 115;
+  const NAME_W     = 150;
+  const PX_PER_HS  = 18;   // aumentado de 16 → 18
+  const GAP        = 5;
   const WEEKS_BEFORE = 4;
   const WEEKS_AFTER  = 8;
-  const TOTAL_DAYS   = (WEEKS_BEFORE + WEEKS_AFTER) * 7; // 84 dias renderizados
+  const TOTAL_DAYS   = (WEEKS_BEFORE + WEEKS_AFTER) * 7;
   const WEEK_PX  = DAY_W * 7;
   const PAD = 4;
 
   let allData = [], personOrder = [], isAdmin = false;
-  let selPerson = '', searchQuery = '', selTipo = '', sortMode = 'custom';
-  let userPhotoMap = {}; // name → photo URL
-  let allJobs = {}; // parentId → jobName — para busca por código base
+  let selPerson = '', searchQuery = '', selTipo = '', selSetor = '', sortMode = 'custom';
+  let userPhotoMap = {};
   let holidays  = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
   let defaultHs = parseInt(localStorage.getItem('default_hs_9mm') || '8');
 
@@ -380,8 +398,11 @@ function initApp(monday) {
         const cronograma = cols['Cronograma']||'';
         const tipo = cols['Tipo']||'';
         const status = cols['Status']||'';
+        const setor = cols['Setor']||'';
         const hsRaw = parseInt(cols['HS']||'0');
         const hs = hsRaw>0 ? hsRaw : defaultHs;
+        const hs1Raw = parseInt(cols['HS1']||'');
+        const hs1 = isNaN(hs1Raw) ? null : hs1Raw;
         if(!resp||!cronograma) return;
         const range = parseRange(cronograma);
         if(!range) return;
@@ -392,7 +413,8 @@ function initApp(monday) {
           siblings: jobSubsMap[item.id] || [],
           cronColId:colIds['Cronograma']||null,
           hsColId:colIds['HS']||null,
-          jobName:sub.name||jobName, clientCode, tipo, status, hs, range
+          hs1ColId:colIds['HS1']||null,
+          jobName:sub.name||jobName, clientCode, tipo, setor, status, hs, hs1, range
         });
       });
     });
@@ -485,6 +507,7 @@ function initApp(monday) {
       await fetchUsers();
       populateFilter();
       populateTipo();
+      populateSetor();
       render();
       if(!silent) showToast('Dados atualizados!');
     } catch(err) {
@@ -521,7 +544,9 @@ function initApp(monday) {
         const ds = fmtD(d);
         const sum = p.subitems.reduce((acc,sub) => {
           const ss=fmtD(sub.range.start), se=fmtD(sub.range.end);
-          return ds>=ss && ds<=se ? acc+sub.hs : acc;
+          if(ds<ss||ds>se) return acc;
+          // Approximation: use hs (first day value) as upper bound
+          return acc + Math.max(sub.hs, sub.hs1??0, 8);
         }, 0);
         if(sum > globalMaxHs) globalMaxHs = sum;
       });
@@ -554,13 +579,14 @@ function initApp(monday) {
     // Filtro pessoa
     if(selPerson) data = data.filter(p => p.person === selPerson);
     // Filtro search + tipo (sem modificar allData)
-    if(searchQuery || selTipo) {
+    if(searchQuery || selTipo || selSetor) {
       data = data.map(p => ({
         ...p,
         subitems: p.subitems.filter(sub => {
           const okSearch = !searchQuery || sub.jobName.toLowerCase().includes(searchQuery.toLowerCase());
           const okTipo   = !selTipo   || sub.tipo === selTipo;
-          return okSearch && okTipo;
+          const okSetor  = !selSetor  || sub.setor === selSetor;
+          return okSearch && okTipo && okSetor;
         })
       })).filter(p => p.subitems.length > 0);
     }
@@ -621,29 +647,47 @@ function initApp(monday) {
       });
       row.appendChild(pdays); rows.appendChild(row);
 
-      // Blocos — quebra em segmentos para não passar por fds/feriado
-      // Aplica ordem customizada antes de construir os blocos
+      // Ordena subitems por ordem customizada
       const ord = subOrder[p.person] || [];
-      const sortedSubs = [...p.subitems].sort((a, b) => {
-        const ia = ord.indexOf(a.subId), ib = ord.indexOf(b.subId);
-        if(ia === -1 && ib === -1) return 0;
-        if(ia === -1) return 1; if(ib === -1) return -1;
-        return ia - ib;
+      const sortedSubs = [...p.subitems].sort((a,b)=>{
+        const ia=ord.indexOf(a.subId), ib=ord.indexOf(b.subId);
+        if(ia===-1&&ib===-1) return 0; if(ia===-1) return 1; if(ib===-1) return -1; return ia-ib;
       });
+
+      // Blocos com lógica HS/HS1:
+      // HS = primeiro dia útil · HS1 = último dia útil · meio = 8
       const blocks=[];
       sortedSubs.forEach(sub=>{
-        let segStart=-1;
+        // Coleta todos os dias úteis no range para esta sub
+        const workDays=[];
         days.forEach((d,i)=>{
-          const ds=fmtD(d), ss=fmtD(sub.range.start), se=fmtD(sub.range.end);
-          const inRange = ds>=ss && ds<=se;
-          const working = !isBlocked(d);
-          if(inRange && working){
-            if(segStart===-1) segStart=i;
-          } else {
-            if(segStart!==-1){ blocks.push({sub,colStart:segStart,colEnd:i-1}); segStart=-1; }
+          const ds=fmtD(d),ss=fmtD(sub.range.start),se=fmtD(sub.range.end);
+          if(ds>=ss&&ds<=se&&!isBlocked(d)) workDays.push(i);
+        });
+        if(workDays.length===0) return;
+
+        const firstIdx=workDays[0], lastIdx=workDays[workDays.length-1];
+
+        // Atribui dayHs a cada dia útil
+        const dayHsOf = i => {
+          if(i===firstIdx) return sub.hs;          // primeiro dia → HS
+          if(i===lastIdx)  return sub.hs1??8;      // último dia  → HS1 ou 8
+          return 8;                                  // meio → sempre 8
+        };
+
+        // Agrupa dias consecutivos com mesmo dayHs em segmentos
+        let segStart=-1, segHs=null;
+        workDays.forEach((idx,k)=>{
+          const curHs=dayHsOf(idx);
+          const consecutive=k>0&&workDays[k-1]===idx-1;
+          if(segStart===-1){
+            segStart=idx; segHs=curHs;
+          } else if(curHs!==segHs||!consecutive){
+            blocks.push({sub,colStart:segStart,colEnd:workDays[k-1],dayHs:segHs});
+            segStart=idx; segHs=curHs;
           }
         });
-        if(segStart!==-1) blocks.push({sub,colStart:segStart,colEnd:days.length-1});
+        if(segStart!==-1) blocks.push({sub,colStart:segStart,colEnd:workDays[workDays.length-1],dayHs:segHs});
       });
 
       const parent=blocks.map((_,i)=>i);
@@ -656,15 +700,15 @@ function initApp(monday) {
       blocks.forEach((b,i)=>{ const r=find(i); (clusters[r]=clusters[r]||[]).push(b); });
 
       Object.values(clusters).forEach(cluster=>{
-        const sum=cluster.reduce((acc,b)=>acc+b.sub.hs,0);
+        const bHs = b => b.dayHs ?? b.sub.hs;
+        const sum=cluster.reduce((acc,b)=>acc+bHs(b),0);
         const over=sum>8;
         const N=cluster.length;
-        // Espaço total para os blocos = sum*PX_PER_HS, menos os gaps entre eles
-        // Assim HS 8 em 1 bloco ou 3 blocos ocupa exatamente a mesma altura visual
         const totalPx = sum * PX_PER_HS - (N-1) * GAP;
         let topOffset=PAD;
-        cluster.forEach(({sub,colStart,colEnd})=>{
-          const blkH = Math.max(16, Math.round(totalPx * sub.hs / sum));
+        cluster.forEach(({sub,colStart,colEnd,dayHs})=>{
+          const thisHs = dayHs ?? sub.hs;
+          const blkH = Math.max(16, Math.round(totalPx * thisHs / sum));
           const left  = colStart*DAY_W + 3;
           const width = (colEnd-colStart+1)*DAY_W - 6;
           const isConcluido = /concluí/i.test(sub.status||'');
@@ -675,9 +719,10 @@ function initApp(monday) {
           const blk=document.createElement('div');
           blk.className='blk'+(over?' over':'');
           blk.style.cssText=`left:${left}px;width:${width}px;top:${topOffset}px;height:${blkH}px;background:${cliColor(sub.clientCode)};${extraStyle}`;
+          blk.title = sub.jobName; // tooltip nativo
           const showSub = blkH >= 26;
           blk.innerHTML = `<div class="blk-job">${sub.jobName}</div>`
-            + (showSub && sub.status ? `<div class="blk-tp">${sub.status} · HS ${sub.hs}</div>` : '');
+            + (showSub && sub.status ? `<div class="blk-tp">${sub.status} · HS ${thisHs}</div>` : '');
           topOffset += blkH + GAP;
 
           // Handle direito — altera data fim
@@ -689,11 +734,14 @@ function initApp(monday) {
             const origDays = Math.round((sub.range.end - sub.range.start) / 86400000);
             function onMove(ev) {
               const delta = Math.round((ev.clientX - startX) / DAY_W);
-              blk._pendingEnd = new Date(sub.range.start.getTime() + Math.max(0, origDays + delta) * 86400000);
+              const pending = new Date(sub.range.start.getTime() + Math.max(0, origDays + delta) * 86400000);
+              blk._pendingEnd = pending;
+              blk.title = `→ ${pending.getDate()} ${MON_PT[pending.getMonth()]}`;
             }
             function onUp() {
               document.removeEventListener('mousemove', onMove);
               document.removeEventListener('mouseup', onUp);
+              blk.title = sub.jobName;
               if(blk._pendingEnd) {
                 pushUndo('range', sub, { start: new Date(sub.range.start), end: new Date(sub.range.end) });
                 sub.range.end = blk._pendingEnd;
@@ -741,11 +789,14 @@ function initApp(monday) {
             const startY = e.clientY; const startHs = sub.hs;
             function onMove(ev) {
               const delta = Math.round((ev.clientY - startY) / PX_PER_HS);
-              blk._pendingHs = Math.max(1, startHs + delta);
+              const pending = Math.max(1, startHs + delta);
+              blk._pendingHs = pending;
+              blk.title = `HS: ${pending}`;
             }
             function onUp() {
               document.removeEventListener('mousemove', onMove);
               document.removeEventListener('mouseup', onUp);
+              blk.title = sub.jobName;
               if(blk._pendingHs && blk._pendingHs !== sub.hs) {
                 pushUndo('hs', sub, sub.hs);
                 sub.hs = blk._pendingHs;
@@ -766,11 +817,14 @@ function initApp(monday) {
             const startY = e.clientY; const startHs = sub.hs;
             function onMove(ev) {
               const delta = Math.round((ev.clientY - startY) / PX_PER_HS);
-              blk._pendingHs = Math.max(1, startHs - delta);
+              const pending = Math.max(1, startHs - delta);
+              blk._pendingHs = pending;
+              blk.title = `HS: ${pending}`;
             }
             function onUp() {
               document.removeEventListener('mousemove', onMove);
               document.removeEventListener('mouseup', onUp);
+              blk.title = sub.jobName;
               if(blk._pendingHs && blk._pendingHs !== sub.hs) {
                 pushUndo('hs', sub, sub.hs);
                 sub.hs = blk._pendingHs;
@@ -788,34 +842,84 @@ function initApp(monday) {
             monday.execute('openItemCard', {itemId: parseInt(sub.subId)});
           });
 
-          // ▲▼ Reordenar dentro do cluster (só aparece quando há mais de 1 bloco)
-          if(cluster.length > 1) {
-            const btnUp = document.createElement('button');
-            btnUp.className='blk-ord blk-ord-up'; btnUp.textContent='▲'; btnUp.title='Mover para cima';
-            blk.appendChild(btnUp);
-            btnUp.addEventListener('click', e => {
-              e.stopPropagation();
-              const arr = subOrder[p.person] || sortedSubs.map(s=>s.subId);
-              const idx = arr.indexOf(sub.subId);
-              if(idx > 0) { [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]]; }
-              else { arr.splice(0, 0, ...arr.splice(arr.indexOf(sub.subId), 1)); }
-              subOrder[p.person] = [...new Set([...arr, ...sortedSubs.map(s=>s.subId)])];
-              localStorage.setItem('subOrder_9mm', JSON.stringify(subOrder));
-              render();
-            });
-            const btnDn = document.createElement('button');
-            btnDn.className='blk-ord blk-ord-dn'; btnDn.textContent='▼'; btnDn.title='Mover para baixo';
-            blk.appendChild(btnDn);
-            btnDn.addEventListener('click', e => {
-              e.stopPropagation();
-              const arr = subOrder[p.person] || sortedSubs.map(s=>s.subId);
-              const idx = arr.indexOf(sub.subId);
-              if(idx < arr.length - 1) { [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]]; }
-              subOrder[p.person] = [...new Set([...arr, ...sortedSubs.map(s=>s.subId)])];
-              localStorage.setItem('subOrder_9mm', JSON.stringify(subOrder));
-              render();
-            });
-          }
+          // ── Arrastar para reordenar (substituí ▲▼) ───────────
+          // Arrastar verticalmente muda a ordem da pessoa
+          blk.addEventListener('mousedown', e => {
+            if(e.target.classList.contains('rs-right')||e.target.classList.contains('rs-left')||
+               e.target.classList.contains('rs-bottom')||e.target.classList.contains('rs-top')||
+               e.target.classList.contains('blk-menu-btn')) return;
+            const startX=e.clientX, startY=e.clientY;
+            let mode=null; // 'reorder' | 'move'
+            const ghost = document.createElement('div');
+            ghost.style.cssText=`position:fixed;opacity:0.6;pointer-events:none;z-index:9999;border-radius:5px;background:${cliColor(sub.clientCode)};padding:4px 8px;font-size:10px;color:#fff;font-weight:600;white-space:nowrap;display:none`;
+            ghost.textContent=sub.jobName;
+            document.body.appendChild(ghost);
+
+            function onMove(ev) {
+              const dx=ev.clientX-startX, dy=ev.clientY-startY;
+              if(!mode && (Math.abs(dx)>12||Math.abs(dy)>12)) {
+                mode = Math.abs(dy)>Math.abs(dx) ? 'reorder' : 'move';
+              }
+              if(mode==='reorder') {
+                ev._dragged=true;
+                ghost.style.display='block';
+                ghost.style.left=(ev.clientX+10)+'px';
+                ghost.style.top=(ev.clientY+10)+'px';
+                blk.style.opacity='0.4';
+              } else if(mode==='move') {
+                const delta=Math.round(dx/DAY_W);
+                const newStart=new Date(sub.range.start.getTime()+delta*86400000);
+                const newEnd=new Date(sub.range.end.getTime()+delta*86400000);
+                blk._pendingStart=newStart; blk._pendingEnd=newEnd;
+                blk.style.opacity='0.7';
+                // Feedback: mostra as datas
+                ghost.style.display='block';
+                ghost.style.left=(ev.clientX+10)+'px';
+                ghost.style.top=(ev.clientY+10)+'px';
+                ghost.textContent=`${newStart.getDate()} ${MON_PT[newStart.getMonth()]} → ${newEnd.getDate()} ${MON_PT[newEnd.getMonth()]}`;
+              }
+            }
+
+            function onUp(ev) {
+              document.removeEventListener('mousemove',onMove);
+              document.removeEventListener('mouseup',onUp);
+              ghost.remove();
+              blk.style.opacity='1';
+
+              if(mode==='reorder') {
+                // Encontra qual bloco está na posição Y atual
+                const allBlks = [...document.querySelectorAll('.blk')];
+                const targetBlk = allBlks.find(b=>{
+                  if(b===blk) return false;
+                  const r=b.getBoundingClientRect();
+                  return ev.clientY>=r.top && ev.clientY<=r.bottom;
+                });
+                if(targetBlk && targetBlk._subId) {
+                  const arr=[...new Set([...sortedSubs.map(s=>s.subId)])];
+                  const fromIdx=arr.indexOf(sub.subId);
+                  const toIdx=arr.indexOf(targetBlk._subId);
+                  if(fromIdx!==-1&&toIdx!==-1) {
+                    arr.splice(fromIdx,1); arr.splice(toIdx,0,sub.subId);
+                  }
+                  subOrder[p.person]=arr;
+                  localStorage.setItem('subOrder_9mm',JSON.stringify(subOrder));
+                  render();
+                }
+              } else if(mode==='move' && blk._pendingStart) {
+                ev._dragged=true;
+                pushUndo('range',sub,{start:new Date(sub.range.start),end:new Date(sub.range.end)});
+                sub.range.start=blk._pendingStart; sub.range.end=blk._pendingEnd;
+                updateRange(sub,blk._pendingStart,blk._pendingEnd);
+                delete blk._pendingStart; delete blk._pendingEnd;
+                render();
+              } else if(!mode) {
+                // click simples
+              }
+            }
+            document.addEventListener('mousemove',onMove);
+            document.addEventListener('mouseup',onUp);
+          });
+          blk._subId = sub.subId; // para o drag-to-reorder identificar o alvo
 
           // ⋮ Menu de contexto
           const menuBtn = document.createElement('button');
@@ -852,43 +956,6 @@ function initApp(monday) {
             dd.style.cssText=`display:block;top:${rect.bottom+2}px;left:${Math.max(4,left)}px`;
           });
 
-          // Arrastar o bloco inteiro — move start e end
-          blk.addEventListener('mousedown', e => {
-            if(e.target !== blk && e.target.tagName !== 'DIV' && !e.target.classList.contains('blk-job') && !e.target.classList.contains('blk-tp')) return;
-            if(e.target.classList.contains('rs-right') || e.target.classList.contains('rs-left') ||
-               e.target.classList.contains('rs-bottom') || e.target.classList.contains('rs-top')) return;
-            const startX = e.clientX;
-            const origStart = new Date(sub.range.start);
-            const origEnd   = new Date(sub.range.end);
-            const span = Math.round((origEnd - origStart) / 86400000);
-            let moved = false;
-            function onMove(ev) {
-              const delta = Math.round((ev.clientX - startX) / DAY_W);
-              if(delta !== 0) moved = true;
-              const newStart = new Date(origStart.getTime() + delta * 86400000);
-              const newEnd   = new Date(origEnd.getTime()   + delta * 86400000);
-              blk._pendingStart = newStart;
-              blk._pendingEnd   = newEnd;
-              // Feedback visual
-              blk.style.opacity = '0.7';
-            }
-            function onUp(ev) {
-              document.removeEventListener('mousemove', onMove);
-              document.removeEventListener('mouseup', onUp);
-              blk.style.opacity = '1';
-              if(moved && blk._pendingStart) {
-                ev._dragged = true;
-                pushUndo('range', sub, { start: new Date(origStart), end: new Date(origEnd) });
-                sub.range.start = blk._pendingStart;
-                sub.range.end   = blk._pendingEnd;
-                updateRange(sub, blk._pendingStart, blk._pendingEnd);
-                delete blk._pendingStart; delete blk._pendingEnd;
-                render();
-              }
-            }
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-          });
           pdays.appendChild(blk);
         });
       });
@@ -900,15 +967,23 @@ function initApp(monday) {
 
   function populateFilter() {
     const sel=document.getElementById('fperson'); const cur=sel.value;
+    const names=[...new Set(allData.map(p=>p.person))].sort((a,b)=>a.localeCompare(b));
     sel.innerHTML='<option value="">Todas as pessoas</option>';
-    allData.forEach(p=>{ const o=document.createElement('option'); o.value=p.person; o.textContent=p.person; if(p.person===cur) o.selected=true; sel.appendChild(o); });
+    names.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; if(n===cur) o.selected=true; sel.appendChild(o); });
   }
 
   function populateTipo() {
     const sel=document.getElementById('ftipo'); const cur=sel.value;
-    const tipos=[...new Set(allData.flatMap(p=>p.subitems.map(s=>s.tipo)).filter(Boolean))].sort();
+    const tipos=[...new Set(allData.flatMap(p=>p.subitems.map(s=>s.tipo)).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
     sel.innerHTML='<option value="">Todos os tipos</option>';
     tipos.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; if(t===cur) o.selected=true; sel.appendChild(o); });
+  }
+
+  function populateSetor() {
+    const sel=document.getElementById('fsetor'); const cur=sel.value;
+    const setores=[...new Set(allData.flatMap(p=>p.subitems.map(s=>s.setor)).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+    sel.innerHTML='<option value="">Todos os setores</option>';
+    setores.forEach(s=>{ const o=document.createElement('option'); o.value=s; o.textContent=s; if(s===cur) o.selected=true; sel.appendChild(o); });
   }
 
   function renderHolidayList() {
@@ -946,6 +1021,21 @@ function initApp(monday) {
   // Scroll label dinâmico
   wrap.addEventListener('scroll', ()=>{ updateWeekLabel(getAllDays()); });
 
+  // ── Arrastar espaço vazio para pan ────────────────────────
+  let isPanning=false, panStartX=0, panScrollLeft=0;
+  wrap.addEventListener('mousedown', e=>{
+    if(e.target!==wrap && !e.target.classList.contains('pdcell') && !e.target.classList.contains('pdays')) return;
+    isPanning=true; panStartX=e.clientX; panScrollLeft=wrap.scrollLeft;
+    wrap.style.cursor='grabbing'; wrap.style.userSelect='none';
+  });
+  document.addEventListener('mousemove', e=>{
+    if(!isPanning) return;
+    wrap.scrollLeft = panScrollLeft - (e.clientX - panStartX);
+  });
+  document.addEventListener('mouseup', ()=>{
+    if(isPanning){ isPanning=false; wrap.style.cursor=''; wrap.style.userSelect=''; }
+  });
+
   // ── Eventos de UI ─────────────────────────────────────────
   document.getElementById('btn-refresh').addEventListener('click', () => refreshData(false));
   document.getElementById('bp').addEventListener('click', ()=>scrollByWeeks(-1));
@@ -961,7 +1051,20 @@ function initApp(monday) {
 
   document.getElementById('fperson').addEventListener('change', e=>{ selPerson=e.target.value; render(); });
   document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; render(); });
-  document.getElementById('fsearch').addEventListener('input', e=>{ searchQuery=e.target.value.trim(); render(); });
+  document.getElementById('fsetor').addEventListener('change', e=>{ selSetor=e.target.value; render(); });
+
+  const fsearch = document.getElementById('fsearch');
+  const fsearchClear = document.getElementById('fsearch-clear');
+  fsearch.addEventListener('input', e=>{
+    searchQuery=e.target.value.trim();
+    fsearchClear.classList.toggle('visible', searchQuery.length>0);
+    render();
+  });
+  fsearchClear.addEventListener('click', ()=>{
+    fsearch.value=''; searchQuery='';
+    fsearchClear.classList.remove('visible');
+    render();
+  });
 
   document.getElementById('btn-add-h').addEventListener('click', ()=>{
     const val=document.getElementById('holiday-input').value;
@@ -1000,6 +1103,7 @@ function initApp(monday) {
       await fetchUsers();
       populateFilter();
       populateTipo();
+      populateSetor();
       document.getElementById('loading').style.display='none';
       document.getElementById('tl-outer').style.display='flex';
       render();
