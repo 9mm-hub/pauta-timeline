@@ -78,6 +78,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* Menu três pontos */
 .blk-menu-btn{position:absolute;top:3px;right:4px;width:18px;height:14px;background:rgba(0,0,0,0.35);border:none;border-radius:3px;color:#fff;font-size:11px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:10;line-height:1;padding:0}
 .blk:hover .blk-menu-btn{display:flex}
+.blk-ord{position:absolute;left:3px;width:16px;height:14px;background:rgba(0,0,0,0.35);border:none;border-radius:3px;color:#fff;font-size:9px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:10;padding:0}
+.blk-ord-up{top:3px}
+.blk-ord-dn{bottom:3px}
+.blk:hover .blk-ord{display:flex}
 #blk-dd{position:fixed;background:#1e1e1e;border:1px solid #444;border-radius:8px;min-width:170px;z-index:9999;box-shadow:0 6px 20px rgba(0,0,0,0.6);overflow:hidden;display:none}
 .dd-label{padding:5px 12px 2px;font-size:9px;color:#666;text-transform:uppercase;letter-spacing:.5px}
 .dd-item{padding:8px 14px;font-size:12px;color:#ddd;cursor:pointer;display:flex;align-items:center;gap:8px;white-space:nowrap}
@@ -199,7 +203,7 @@ function initApp(monday) {
   let userPhotoMap = {}; // name → photo URL
   let allJobs = {}; // parentId → jobName — para busca por código base
   let holidays  = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
-  let defaultHs = parseInt(localStorage.getItem('default_hs_9mm') || '7');
+  let defaultHs = parseInt(localStorage.getItem('default_hs_9mm') || '8');
 
   // Extrai o código base do job (COD_NUM_ANO sem a letra final)
   // Aceita hífens ou underscores: ACC-0005-26F ou ACC_0005_26A → "ACC_0005_26"
@@ -435,7 +439,8 @@ function initApp(monday) {
     } catch(e) { console.warn('Erro ao buscar fotos:', e); }
   }
 
-  let currentBoardId = null;
+  let subOrder = JSON.parse(localStorage.getItem('subOrder_9mm') || '{}');
+  // subOrder[person] = [subId, subId, ...] — ordem customizada dos subitems
   const undoStack = [];
   const MAX_UNDO = 30;
 
@@ -467,7 +472,7 @@ function initApp(monday) {
     }
   });
 
-  async function refreshData(silent = false) {
+  let currentBoardId = null;
     if(!currentBoardId) return;
     const btn = document.getElementById('btn-refresh');
     if(btn) btn.classList.add('spinning');
@@ -491,6 +496,14 @@ function initApp(monday) {
   // Auto-refresh a cada 2 minutos
   setInterval(() => refreshData(true), 2 * 60 * 1000);
 
+  // Atualiza automaticamente quando algo muda no board
+  let refreshTimer = null;
+  monday.listen('events', () => {
+    // Debounce: espera 1.5s após o último evento antes de atualizar
+    clearTimeout(refreshTimer);
+    refreshTimer = setTimeout(() => refreshData(true), 1500);
+  });
+
   // ── Render ────────────────────────────────────────────────
   function render() {
     const days = getAllDays();
@@ -498,7 +511,7 @@ function initApp(monday) {
     // ── Altura global uniforme ────────────────────────────────
     // Calcula o maior empilhamento de HS num mesmo dia (em qualquer pessoa)
     // para que TODAS as linhas tenham exatamente a mesma altura.
-    let globalMaxHs = 7;
+    let globalMaxHs = 8;
     const visData0 = selPerson ? allData.filter(p=>p.person===selPerson) : allData;
     visData0.forEach(p => {
       days.forEach(d => {
@@ -607,8 +620,16 @@ function initApp(monday) {
       row.appendChild(pdays); rows.appendChild(row);
 
       // Blocos — quebra em segmentos para não passar por fds/feriado
+      // Aplica ordem customizada antes de construir os blocos
+      const ord = subOrder[p.person] || [];
+      const sortedSubs = [...p.subitems].sort((a, b) => {
+        const ia = ord.indexOf(a.subId), ib = ord.indexOf(b.subId);
+        if(ia === -1 && ib === -1) return 0;
+        if(ia === -1) return 1; if(ib === -1) return -1;
+        return ia - ib;
+      });
       const blocks=[];
-      p.subitems.forEach(sub=>{
+      sortedSubs.forEach(sub=>{
         let segStart=-1;
         days.forEach((d,i)=>{
           const ds=fmtD(d), ss=fmtD(sub.range.start), se=fmtD(sub.range.end);
@@ -634,10 +655,10 @@ function initApp(monday) {
 
       Object.values(clusters).forEach(cluster=>{
         const sum=cluster.reduce((acc,b)=>acc+b.sub.hs,0);
-        const over=sum>7;
+        const over=sum>8;
         const N=cluster.length;
         // Espaço total para os blocos = sum*PX_PER_HS, menos os gaps entre eles
-        // Assim HS 7 em 1 bloco ou 3 blocos ocupa exatamente a mesma altura visual
+        // Assim HS 8 em 1 bloco ou 3 blocos ocupa exatamente a mesma altura visual
         const totalPx = sum * PX_PER_HS - (N-1) * GAP;
         let topOffset=PAD;
         cluster.forEach(({sub,colStart,colEnd})=>{
@@ -764,6 +785,35 @@ function initApp(monday) {
             if(e._dragged) return;
             monday.execute('openItemCard', {itemId: parseInt(sub.subId)});
           });
+
+          // ▲▼ Reordenar dentro do cluster (só aparece quando há mais de 1 bloco)
+          if(cluster.length > 1) {
+            const btnUp = document.createElement('button');
+            btnUp.className='blk-ord blk-ord-up'; btnUp.textContent='▲'; btnUp.title='Mover para cima';
+            blk.appendChild(btnUp);
+            btnUp.addEventListener('click', e => {
+              e.stopPropagation();
+              const arr = subOrder[p.person] || sortedSubs.map(s=>s.subId);
+              const idx = arr.indexOf(sub.subId);
+              if(idx > 0) { [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]]; }
+              else { arr.splice(0, 0, ...arr.splice(arr.indexOf(sub.subId), 1)); }
+              subOrder[p.person] = [...new Set([...arr, ...sortedSubs.map(s=>s.subId)])];
+              localStorage.setItem('subOrder_9mm', JSON.stringify(subOrder));
+              render();
+            });
+            const btnDn = document.createElement('button');
+            btnDn.className='blk-ord blk-ord-dn'; btnDn.textContent='▼'; btnDn.title='Mover para baixo';
+            blk.appendChild(btnDn);
+            btnDn.addEventListener('click', e => {
+              e.stopPropagation();
+              const arr = subOrder[p.person] || sortedSubs.map(s=>s.subId);
+              const idx = arr.indexOf(sub.subId);
+              if(idx < arr.length - 1) { [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]]; }
+              subOrder[p.person] = [...new Set([...arr, ...sortedSubs.map(s=>s.subId)])];
+              localStorage.setItem('subOrder_9mm', JSON.stringify(subOrder));
+              render();
+            });
+          }
 
           // ⋮ Menu de contexto
           const menuBtn = document.createElement('button');
