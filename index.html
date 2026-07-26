@@ -156,7 +156,20 @@ function initApp(monday) {
   const ROW_H = 80, PAD = 3;
 
   async function fetchData(bId) {
-    const query = `query { boards(ids: [${bId}]) { items_page(limit: 200) { items { id name subitems { id name column_values { id title text value } } } } } }`;
+    const query = `query {
+      boards(ids: [${bId}]) {
+        items_page(limit: 200) {
+          items {
+            id name
+            subitems {
+              id name
+              board { id columns { id title } }
+              column_values { id text value }
+            }
+          }
+        }
+      }
+    }`;
     const res = await monday.api(query);
     return res.data.boards[0].items_page.items;
   }
@@ -187,8 +200,12 @@ function initApp(monday) {
       const jobName = item.name || '';
       const clientCode = jobName.slice(0,3).toUpperCase();
       (item.subitems || []).forEach(sub => {
+        const colTitleMap = {};
+        if (sub.board && sub.board.columns) {
+          sub.board.columns.forEach(c => { colTitleMap[c.id] = c.title; });
+        }
         const cols = {};
-        sub.column_values.forEach(c => { cols[c.title] = c.text; });
+        sub.column_values.forEach(c => { cols[colTitleMap[c.id] || c.id] = c.text; });
         const resp = cols['Resp.'] || cols['Responsável'] || cols['Resp'] || '';
         const cronograma = cols['Cronograma'] || '';
         const tipo = cols['Tipo'] || '';
