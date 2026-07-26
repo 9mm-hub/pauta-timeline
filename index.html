@@ -259,9 +259,17 @@ function initApp(monday) {
       .map(([id, name]) => ({ id, name }));
   }
 
-  // ── Cores ─────────────────────────────────────────────────
-  const cliColors = {}; let ci = 0;
-  function cliColor(c) { if(!cliColors[c]){ cliColors[c]=PALETTE[ci%PALETTE.length]; ci++; } return cliColors[c]; }
+  // Cores determinísticas por código de cliente — hash garante sempre a mesma cor
+  const cliColors = {};
+  function hashStr(s) {
+    let h = 2166136261;
+    for(let i=0;i<s.length;i++) h = Math.imul(h^s.charCodeAt(i), 16777619);
+    return h >>> 0;
+  }
+  function cliColor(c) {
+    if(!cliColors[c]) cliColors[c] = PALETTE[hashStr(c) % PALETTE.length];
+    return cliColors[c];
+  }
   const avColors = ['#5c7cfa','#f06595','#ffa94d','#51cf66','#cc5de8','#22b8cf','#ff6b6b','#74c0fc'];
   const avMap = {}; let ai = 0;
   function avColor(n) { if(!avMap[n]){ avMap[n]=avColors[ai%avColors.length]; ai++; } return avMap[n]; }
