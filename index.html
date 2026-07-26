@@ -33,7 +33,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 .name-col{width:150px;flex-shrink:0}
 .days-header{display:flex;position:sticky;top:0;z-index:10;background:#000;border-bottom:1px solid #333}
-.days-header .name-col{border-right:1px solid #333;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:4px 6px 3px;gap:3px}
+.days-header .name-col{border-right:1px solid #333;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:4px 6px 3px;gap:3px;position:sticky;left:0;z-index:11}
 /* Sort controls */
 #sort-controls{display:flex;gap:3px;flex-wrap:wrap;justify-content:center}
 .sort-btn{background:#1a1a1a;border:1px solid #333;color:#888;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:9px;white-space:nowrap}
@@ -125,10 +125,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
         <div class="days-header" id="days-header">
           <div class="name-col">
             <div id="sort-controls">
-              <button class="sort-btn active" data-sort="custom">↕ Padrão</button>
+              <button class="sort-btn active" data-sort="custom">↕ Custom</button>
               <button class="sort-btn" data-sort="az">A→Z</button>
               <button class="sort-btn" data-sort="za">Z→A</button>
-              <button class="sort-btn" data-sort="tipo">Tipo</button>
             </div>
           </div>
           <div id="days-header-inner" class="days-header-inner"></div>
@@ -490,12 +489,7 @@ function initApp(monday) {
     data = [...data].sort((a,b)=>{
       if(sortMode === 'az') return a.person.localeCompare(b.person);
       if(sortMode === 'za') return b.person.localeCompare(a.person);
-      if(sortMode === 'tipo') {
-        const tipoOf = p => p.subitems[0]?.tipo || '';
-        const cmp = tipoOf(a).localeCompare(tipoOf(b));
-        return cmp !== 0 ? cmp : a.person.localeCompare(b.person);
-      }
-      // custom (drag order)
+      // custom — mantém a ordem do drag
       const ia=personOrder.indexOf(a.person), ib=personOrder.indexOf(b.person);
       if(ia===-1&&ib===-1) return 0; if(ia===-1) return 1; if(ib===-1) return -1; return ia-ib;
     });
