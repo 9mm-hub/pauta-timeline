@@ -1186,9 +1186,12 @@ function initApp(monday) {
   monday.listen('context', async res => {
     const boardId = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
     currentBoardId = boardId;
-    const currentUserId   = res.data.user?.id;
     const currentUserName = res.data.user?.name || '';
-    isAdmin = !ADMIN_USER_ID || String(currentUserId) === String(ADMIN_USER_ID);
+    const currentUserId   = res.data.user?.id;
+    // Admin = admin da conta Monday OU ID específico definido acima
+    isAdmin = res.data.user?.isAdmin === true ||
+              (ADMIN_USER_ID && String(currentUserId) === String(ADMIN_USER_ID));
+    console.log('User:', currentUserName, '| ID:', currentUserId, '| isAdmin:', isAdmin);
     if(isAdmin) {
       document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');
     } else {
