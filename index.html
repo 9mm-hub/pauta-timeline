@@ -33,12 +33,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 .name-col{width:150px;flex-shrink:0}
 .days-header{display:flex;position:sticky;top:0;z-index:10;background:#000;border-bottom:1px solid #333}
-.days-header .name-col{border-right:1px solid #333;background:#000}
+.days-header .name-col{border-right:1px solid #333;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:4px 6px 3px;gap:3px}
+/* Sort controls */
+#sort-controls{display:flex;gap:3px;flex-wrap:wrap;justify-content:center}
+.sort-btn{background:#1a1a1a;border:1px solid #333;color:#888;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:9px;white-space:nowrap}
+.sort-btn:hover{background:#2a2a2a;color:#ccc}
+.sort-btn.active{border-color:#7c83f5;color:#7c83f5}
 .days-header-inner{display:flex}
 .week-group{display:flex;flex-direction:column}
 .week-label{font-size:9px;color:#555;padding:2px 4px;border-right:1px solid #2e3150;border-bottom:1px solid #2a2a2a;text-align:center;background:#000}
 .week-days{display:flex}
-.dh{width:100px;flex-shrink:0;padding:4px 4px 3px;text-align:center;font-size:10px;color:#666;border-right:1px solid #2e3150}
+.dh{width:115px;flex-shrink:0;padding:4px 4px 3px;text-align:center;font-size:10px;color:#666;border-right:1px solid #2e3150}
 .dh:last-child{border-right:none}
 .dh span{display:block;font-size:14px;font-weight:500;color:#ccc}
 .dh.today{color:#7c83f5}
@@ -47,9 +52,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .dh.holiday{background:#2d1414}
 
 .prow{display:flex;border-bottom:1px solid #222}
-.pname{width:150px;flex-shrink:0;padding:8px 10px;font-size:12px;font-weight:500;color:#ddd;border-right:1px solid #333;display:flex;align-items:flex-start;gap:6px;cursor:grab;background:#000;position:sticky;left:0;z-index:5}
-.av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;flex-shrink:0;color:#fff}
-.pname-text{font-size:11px;line-height:1.4;color:#ddd}
+.pname{width:150px;flex-shrink:0;padding:8px 6px 8px;font-size:12px;font-weight:500;color:#ddd;border-right:1px solid #333;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:5px;cursor:grab;background:#000;position:sticky;left:0;z-index:5}
+.av{width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;color:#fff;overflow:hidden;border:2px solid rgba(255,255,255,0.1)}
+.av img{width:100%;height:100%;object-fit:cover;border-radius:50%}
+.pname-text{font-size:10px;line-height:1.3;color:#ddd;text-align:center;word-break:break-word}
 .pdays{display:flex;position:relative}
 .pdcell{width:100px;flex-shrink:0;border-right:1px solid #1e1e1e}
 .pdcell.today-col{background:rgba(124,131,245,0.07)}
@@ -117,7 +123,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <div id="tl-wrap">
       <div id="tl-scroll">
         <div class="days-header" id="days-header">
-          <div class="name-col"></div>
+          <div class="name-col">
+            <div id="sort-controls">
+              <button class="sort-btn active" data-sort="custom">↕ Padrão</button>
+              <button class="sort-btn" data-sort="az">A→Z</button>
+              <button class="sort-btn" data-sort="za">Z→A</button>
+              <button class="sort-btn" data-sort="tipo">Tipo</button>
+            </div>
+          </div>
           <div id="days-header-inner" class="days-header-inner"></div>
         </div>
         <div id="rows"></div>
@@ -180,7 +193,8 @@ function initApp(monday) {
   const PAD = 4;
 
   let allData = [], personOrder = [], isAdmin = false;
-  let selPerson = '', searchQuery = '', selTipo = '';
+  let selPerson = '', searchQuery = '', selTipo = '', sortMode = 'custom';
+  let userPhotoMap = {}; // name → photo URL
   let allJobs = {}; // parentId → jobName — para busca por código base
   let holidays  = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
   let defaultHs = parseInt(localStorage.getItem('default_hs_9mm') || '7');
@@ -406,6 +420,15 @@ function initApp(monday) {
     }
   }
 
+  async function fetchUsers() {
+    try {
+      const res = await monday.api(`query { users { name photo_thumb } }`);
+      (res.data.users || []).forEach(u => {
+        if(u.name && u.photo_thumb) userPhotoMap[u.name] = u.photo_thumb;
+      });
+    } catch(e) { console.warn('Erro ao buscar fotos:', e); }
+  }
+
   // ── Render ────────────────────────────────────────────────
   function render() {
     const days = getAllDays();
@@ -465,6 +488,14 @@ function initApp(monday) {
       })).filter(p => p.subitems.length > 0);
     }
     data = [...data].sort((a,b)=>{
+      if(sortMode === 'az') return a.person.localeCompare(b.person);
+      if(sortMode === 'za') return b.person.localeCompare(a.person);
+      if(sortMode === 'tipo') {
+        const tipoOf = p => p.subitems[0]?.tipo || '';
+        const cmp = tipoOf(a).localeCompare(tipoOf(b));
+        return cmp !== 0 ? cmp : a.person.localeCompare(b.person);
+      }
+      // custom (drag order)
       const ia=personOrder.indexOf(a.person), ib=personOrder.indexOf(b.person);
       if(ia===-1&&ib===-1) return 0; if(ia===-1) return 1; if(ib===-1) return -1; return ia-ib;
     });
@@ -479,7 +510,14 @@ function initApp(monday) {
       const nc = document.createElement('div'); nc.className='pname';
       nc.style.width=NAME_W+'px'; nc.draggable=true; nc.dataset.person=p.person;
       const av = document.createElement('div'); av.className='av';
-      av.style.background=avColor(p.person); av.textContent=initials(p.person);
+      av.style.background = avColor(p.person);
+      if(userPhotoMap[p.person]) {
+        const img = document.createElement('img');
+        img.src = userPhotoMap[p.person]; img.alt = initials(p.person);
+        av.appendChild(img);
+      } else {
+        av.textContent = initials(p.person);
+      }
       const ns = document.createElement('div'); ns.className='pname-text'; ns.textContent=p.person;
       nc.appendChild(av); nc.appendChild(ns); row.appendChild(nc);
 
@@ -550,9 +588,9 @@ function initApp(monday) {
           const left  = colStart*DAY_W + 3;
           const width = (colEnd-colStart+1)*DAY_W - 6;
           const isConcluido = /concluí/i.test(sub.status||'');
-          const isAndamento = /andamento/i.test(sub.status||'');
+          const isAndamento = /andamento|pausad/i.test(sub.status||'');
           let extraStyle = '';
-          if(isConcluido) extraStyle += 'opacity:0.42;';
+          if(isConcluido) extraStyle += 'opacity:0.58;';
           if(isAndamento) extraStyle += 'outline:2px solid rgba(255,255,255,0.75);outline-offset:-2px;';
           const blk=document.createElement('div');
           blk.className='blk'+(over?' over':'');
@@ -798,6 +836,14 @@ function initApp(monday) {
   document.getElementById('bp').addEventListener('click', ()=>scrollByWeeks(-1));
   document.getElementById('bn').addEventListener('click', ()=>scrollByWeeks(1));
   document.getElementById('btn-today').addEventListener('click', scrollToToday);
+  document.getElementById('sort-controls').addEventListener('click', e => {
+    const btn = e.target.closest('.sort-btn');
+    if(!btn) return;
+    sortMode = btn.dataset.sort;
+    document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b===btn));
+    render();
+  });
+
   document.getElementById('fperson').addEventListener('change', e=>{ selPerson=e.target.value; render(); });
   document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; render(); });
   document.getElementById('fsearch').addEventListener('input', e=>{ searchQuery=e.target.value.trim(); render(); });
@@ -835,6 +881,7 @@ function initApp(monday) {
     try {
       const items=await fetchData(boardId);
       allData=processItems(items);
+      await fetchUsers();
       populateFilter();
       populateTipo();
       document.getElementById('loading').style.display='none';
