@@ -401,10 +401,17 @@ function initApp(monday) {
         const tipo = cols['Tipo']||'';
         const status = cols['Status']||'';
         const setor = cols['Setor']||'';
-        const hsRaw = parseInt(cols['HS']||'0');
-        const hs = hsRaw>0 ? hsRaw : defaultHs;
-        const hs1Raw = parseInt(cols['HS1']||'');
-        const hs1 = isNaN(hs1Raw) ? null : hs1Raw;
+        const hsText = (cols['HS']||'').trim();
+        const hsRaw = parseInt(hsText);
+        const hs = (!hsText||isNaN(hsRaw)) ? defaultHs : hsRaw;
+
+        const hs0Text = (cols['HS0']||'').trim();
+        const hs0Raw = parseInt(hs0Text);
+        const hs0 = (!hs0Text||isNaN(hs0Raw)) ? null : hs0Raw; // null=vazio→8, 0=some, N→N
+
+        const hs1Text = (cols['HS1']||'').trim();
+        const hs1Raw = parseInt(hs1Text);
+        const hs1 = (!hs1Text||isNaN(hs1Raw)) ? null : hs1Raw;
         if(!resp||!cronograma) return;
         const range = parseRange(cronograma);
         if(!range) return;
@@ -416,7 +423,8 @@ function initApp(monday) {
           cronColId:colIds['Cronograma']||null,
           hsColId:colIds['HS']||null,
           hs1ColId:colIds['HS1']||null,
-          jobName:sub.name||jobName, clientCode, tipo, setor, status, hs, hs1, range
+          hs0ColId:colIds['HS0']||null,
+          jobName:sub.name||jobName, clientCode, tipo, setor, status, hs, hs0, hs1, range
         });
       });
     });
@@ -538,11 +546,33 @@ function initApp(monday) {
     // ── Altura global uniforme ────────────────────────────────
     // Calcula o maior empilhamento de HS num mesmo dia (em qualquer pessoa)
     // para que TODAS as linhas tenham exatamente a mesma altura.
-    // ROW_H fixo em 8HS — sem espaço vazio extra
+    // ROW_H: zona normal (8HS) + espaço para blocos overflow compactos
     const NORMAL_HS = 8;
-    const NORMAL_H  = NORMAL_HS * PX_PER_HS; // zona normal: 144px
-    const COMPACT_H = Math.round(PX_PER_HS * 0.85); // bloco compacto ~15px
-    const ROW_H = PAD*2 + NORMAL_H;
+    const NORMAL_H  = NORMAL_HS * PX_PER_HS;
+    const COMPACT_H = Math.round(PX_PER_HS * 0.85);
+
+    // Pré-calcula o maior número de blocos overflow em qualquer dia/pessoa
+    let maxOverflow = 0;
+    (selPerson ? allData.filter(p=>p.person===selPerson) : allData).forEach(p => {
+      const ord = subOrder[p.person] || [];
+      const sSubs = [...p.subitems].sort((a,b)=>{
+        const ia=ord.indexOf(a.subId),ib=ord.indexOf(b.subId);
+        if(ia===-1&&ib===-1) return 0; if(ia===-1) return 1; if(ib===-1) return -1; return ia-ib;
+      });
+      days.forEach(d => {
+        if(isBlocked(d)) return;
+        const ds=fmtD(d);
+        let runHs=0, ov=0;
+        sSubs.forEach(sub => {
+          const ss=fmtD(sub.range.start),se=fmtD(sub.range.end);
+          if(ds<ss||ds>se) return;
+          if(runHs>=NORMAL_HS) ov++;
+          runHs+=sub.hs;
+        });
+        if(ov>maxOverflow) maxOverflow=ov;
+      });
+    });
+    const ROW_H = PAD*2 + NORMAL_H + (maxOverflow>0 ? maxOverflow*(COMPACT_H+GAP) : 0);
 
     // Cabeçalho de dias agrupado por semana
     const dhi = document.getElementById('days-header-inner');
@@ -629,7 +659,6 @@ function initApp(monday) {
       // Células de dias
       const pdays = document.createElement('div'); pdays.className='pdays';
       pdays.style.width=(TOTAL_DAYS*DAY_W)+'px'; pdays.style.position='relative';
-      pdays.style.overflow='visible';
       days.forEach(d=>{
         const cell=document.createElement('div');
         cell.className='pdcell'+(isToday(d)?' today-col':'')+(isWknd(d)?' wknd-col':'')+(isHoliday(d)?' holiday-col':'');
@@ -659,18 +688,30 @@ function initApp(monday) {
 
         const firstIdx=workDays[0], lastIdx=workDays[workDays.length-1];
 
-        // Atribui dayHs a cada dia útil
+        // Lógica por número de dias:
+        // 1 dia  → HS
+        // 2 dias → primeiro=HS, último=HS1
+        // 3+ dias → primeiro=HS, meio=HS0(null→8, 0→some), último=HS1
         const dayHsOf = i => {
-          if(i===firstIdx) return sub.hs;          // primeiro dia → HS
-          if(i===lastIdx)  return sub.hs1??8;      // último dia  → HS1 ou 8
-          return 8;                                  // meio → sempre 8
+          if(workDays.length === 1) return sub.hs;
+          if(i === firstIdx) return sub.hs;
+          if(i === lastIdx)  return sub.hs1 ?? defaultHs;
+          // dias do meio (só existe se workDays.length > 2)
+          if(sub.hs0 === null) return 8;   // HS0 vazio → 8
+          if(sub.hs0 === 0)    return 0;   // HS0 = 0 → some
+          return sub.hs0;                   // HS0 > 0 → usa valor
         };
 
-        // Agrupa dias consecutivos com mesmo dayHs em segmentos
+        // Agrupa dias consecutivos com mesmo dayHs em segmentos, pula dias com hs=0
         let segStart=-1, segHs=null;
         workDays.forEach((idx,k)=>{
           const curHs=dayHsOf(idx);
           const consecutive=k>0&&workDays[k-1]===idx-1;
+          if(curHs===0){
+            // HS=0 → não mostra bloco nesse dia, fecha segmento atual
+            if(segStart!==-1){ blocks.push({sub,colStart:segStart,colEnd:workDays[k-1],dayHs:segHs}); segStart=-1; segHs=null; }
+            return;
+          }
           if(segStart===-1){
             segStart=idx; segHs=curHs;
           } else if(curHs!==segHs||!consecutive){
