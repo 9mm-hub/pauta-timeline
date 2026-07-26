@@ -473,6 +473,8 @@ function initApp(monday) {
   });
 
   let currentBoardId = null;
+
+  async function refreshData(silent = false) {
     if(!currentBoardId) return;
     const btn = document.getElementById('btn-refresh');
     if(btn) btn.classList.add('spinning');
