@@ -207,15 +207,17 @@ function initApp(monday) {
   })();
 
   // ── Constantes de layout ──────────────────────────────────
-  const DAY_W      = 115;
   const NAME_W     = 150;
-  const PX_PER_HS  = 18;   // aumentado de 16 → 18
+  const PX_PER_HS  = 18;
   const GAP        = 5;
   const WEEKS_BEFORE = 4;
   const WEEKS_AFTER  = 8;
   const TOTAL_DAYS   = (WEEKS_BEFORE + WEEKS_AFTER) * 7;
-  const WEEK_PX  = DAY_W * 7;
   const PAD = 4;
+
+  // DAY_W dinâmico: 7 dias úteis visíveis no viewport
+  const DAY_W = Math.max(70, Math.floor((window.innerWidth - NAME_W) / 7));
+  const WEEK_PX = DAY_W * 7;
 
   let allData = [], personOrder = [], isAdmin = false;
   let selPerson = '', searchQuery = '', selTipo = '', selSetor = '', sortMode = 'custom';
@@ -702,13 +704,15 @@ function initApp(monday) {
         const sum=cluster.reduce((acc,b)=>acc+bHs(b),0);
         const over=sum>8;
         const N=cluster.length;
-        // Preenche proporcionalmente o espaço disponível da linha
-        // Mantém proporções entre blocos do mesmo cluster
-        const availH = ROW_H - PAD*2 - (N-1)*GAP;
+        // Altura fixa por HS — proporcional e previsível
+        // Se ultrapassar a linha, comprime proporcionalmente
+        const maxAvail = ROW_H - PAD*2 - (N-1)*GAP;
+        const naturalH = sum * PX_PER_HS;
+        const scale = naturalH > maxAvail ? maxAvail / naturalH : 1;
         let topOffset=PAD;
         cluster.forEach(({sub,colStart,colEnd,dayHs})=>{
           const thisHs = dayHs ?? sub.hs;
-          const blkH = Math.max(16, Math.round(availH * thisHs / sum));
+          const blkH = Math.max(16, Math.round(thisHs * PX_PER_HS * scale));
           const left  = colStart*DAY_W + 3;
           const width = (colEnd-colStart+1)*DAY_W - 6;
           const isConcluido = /concluí/i.test(sub.status||'');
