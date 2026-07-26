@@ -155,7 +155,8 @@ function initApp(monday) {
   const WEEKS_AFTER  = 8;
   const TOTAL_DAYS   = (WEEKS_BEFORE + WEEKS_AFTER) * 7; // 84 dias renderizados
   const WEEK_PX  = DAY_W * 7;  // 700px por semana
-  const PAD = 3;
+  const PAD   = 3;
+  const ROW_H = 112; // altura fixa igual para todas as linhas (7 unidades × 16px)
 
   let allData = [], personOrder = [], isAdmin = false;
   let selPerson = '';
@@ -368,19 +369,6 @@ function initApp(monday) {
     const rows = document.getElementById('rows'); rows.innerHTML='';
 
     data.forEach(p => {
-      // Altura dinâmica baseada na carga máxima num dia
-      let maxDayHs = 7;
-      days.forEach(d => {
-        if(isBlocked(d)) return;
-        const ds = fmtD(d);
-        const sum = p.subitems.reduce((acc,sub)=>{
-          const ss=fmtD(sub.range.start), se=fmtD(sub.range.end);
-          return ds>=ss&&ds<=se ? acc+sub.hs : acc;
-        },0);
-        if(sum>maxDayHs) maxDayHs=sum;
-      });
-      const ROW_H = Math.max(80, Math.round(80*(maxDayHs/7)));
-
       const row = document.createElement('div');
       row.className='prow'; row.style.minHeight=ROW_H+'px';
 
