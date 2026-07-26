@@ -233,11 +233,11 @@ function initApp(monday) {
   const WEEK_PX = DAY_W * 7;
 
   let allData = [], personOrder = [], isAdmin = false;
-  let selPersons = [];
+  let selPersons = JSON.parse(localStorage.getItem('filter_persons_9mm') || '[]');
   let searchQuery = '';
-  let selTipo  = '';
-  let selSetor = '';
-  let sortMode = 'custom';
+  let selTipo  = localStorage.getItem('filter_tipo_9mm')  || '';
+  let selSetor = localStorage.getItem('filter_setor_9mm') || '';
+  let sortMode = localStorage.getItem('filter_sort_9mm')  || 'custom';
   let userPhotoMap = {};
   let userNameById = {};
   let holidays  = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
@@ -1047,7 +1047,7 @@ function initApp(monday) {
         selPersons = [];
         dd.querySelectorAll('input[data-person]').forEach(c => c.checked=false);
       }
-      updatePersonBtn(); render();
+      updatePersonBtn(); localStorage.setItem('filter_persons_9mm', JSON.stringify(selPersons)); render();
     });
     names.forEach(name => {
       const lbl = document.createElement('label');
@@ -1058,7 +1058,7 @@ function initApp(monday) {
         if(ck.checked) { if(!selPersons.includes(name)) selPersons.push(name); }
         else { selPersons = selPersons.filter(p=>p!==name); }
         allCk.checked = selPersons.length === 0;
-        updatePersonBtn(); render();
+        updatePersonBtn(); localStorage.setItem('filter_persons_9mm', JSON.stringify(selPersons)); render();
       });
       dd.appendChild(lbl);
     });
@@ -1146,6 +1146,7 @@ function initApp(monday) {
     const btn = e.target.closest('.sort-btn');
     if(!btn) return;
     sortMode = btn.dataset.sort;
+    localStorage.setItem('filter_sort_9mm', sortMode);
     document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b===btn));
     render();
   });
@@ -1155,8 +1156,8 @@ function initApp(monday) {
   const fpersonDd  = document.getElementById('fperson-dd');
   fpersonBtn.addEventListener('click', e => { e.stopPropagation(); fpersonDd.classList.toggle('open'); });
   document.addEventListener('click', e => { if(!fpersonDd.contains(e.target) && e.target!==fpersonBtn) fpersonDd.classList.remove('open'); });
-  document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; render(); });
-  document.getElementById('fsetor').addEventListener('change', e=>{ selSetor=e.target.value; render(); });
+  document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; localStorage.setItem('filter_tipo_9mm', selTipo); render(); });
+  document.getElementById('fsetor').addEventListener('change', e=>{ selSetor=e.target.value; localStorage.setItem('filter_setor_9mm', selSetor); render(); });
 
   const fsearch = document.getElementById('fsearch');
   const fsearchClear = document.getElementById('fsearch-clear');
