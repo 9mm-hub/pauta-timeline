@@ -18,6 +18,16 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #refresh-icon{display:inline-block}
 #btn-refresh.spinning #refresh-icon{animation:spin .6s linear infinite}
 #fperson,#ftipo,#fsetor{background:#1a1a1a;border:1px solid #333;color:#ddd;padding:4px 8px;border-radius:6px;font-size:12px}
+/* Multi-select pessoa */
+#fperson-wrap{position:relative}
+#fperson-btn{background:#1a1a1a;border:1px solid #333;color:#ddd;padding:4px 10px;border-radius:6px;font-size:12px;cursor:pointer;white-space:nowrap}
+#fperson-btn:hover{background:#2a2a2a}
+#fperson-dd{display:none;position:absolute;top:calc(100% + 4px);left:0;background:#1e1e1e;border:1px solid #444;border-radius:8px;z-index:500;min-width:170px;max-height:220px;overflow-y:auto;box-shadow:0 6px 16px rgba(0,0,0,0.6)}
+#fperson-dd.open{display:block}
+#fperson-dd label{display:flex;align-items:center;gap:8px;padding:6px 12px;font-size:12px;color:#ddd;cursor:pointer;white-space:nowrap;user-select:none}
+#fperson-dd label:hover{background:#2e2e2e}
+#fperson-dd input[type=checkbox]{accent-color:#7c83f5;cursor:pointer}
+.fperson-all{border-bottom:1px solid #333;margin-bottom:2px}
 #search-wrap{position:relative;display:flex;align-items:center}
 #fsearch{background:#1a1a1a;border:1px solid #333;color:#ddd;padding:4px 26px 4px 8px;border-radius:6px;font-size:12px;width:140px}
 #fsearch::placeholder{color:#555}
@@ -130,7 +140,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <select id="ftipo" class="admin-only"><option value="">Todos os tipos</option></select>
     <select id="fsetor" class="admin-only"><option value="">Todos os setores</option></select>
-    <select id="fperson" class="admin-only"><option value="">Todas as pessoas</option></select>
+    <div id="fperson-wrap" class="admin-only">
+      <button id="fperson-btn">Todas as pessoas</button>
+      <div id="fperson-dd"></div>
+    </div>
     <button id="bcfg" class="admin-only">&#128197; Feriados</button>
     <button id="bpesos" class="admin-only">&#9881; Pesos</button>
   </div>
@@ -220,7 +233,7 @@ function initApp(monday) {
   const WEEK_PX = DAY_W * 7;
 
   let allData = [], personOrder = [], isAdmin = false;
-  let selPerson = localStorage.getItem('filter_person_9mm') || '';
+  let selPersons = JSON.parse(localStorage.getItem('filter_persons_9mm') || '[]');
   let searchQuery = '';
   let selTipo   = localStorage.getItem('filter_tipo_9mm')   || '';
   let selSetor  = localStorage.getItem('filter_setor_9mm')  || '';
@@ -557,7 +570,7 @@ function initApp(monday) {
 
     // Pré-calcula o maior número de blocos overflow em qualquer dia/pessoa
     let maxOverflow = 0;
-    (selPerson ? allData.filter(p=>p.person===selPerson) : allData).forEach(p => {
+    (selPersons.length > 0 ? allData.filter(p=>selPersons.includes(p.person)) : allData).forEach(p => {
       const ord = subOrder[p.person] || [];
       const sSubs = [...p.subitems].sort((a,b)=>{
         const ia=ord.indexOf(a.subId),ib=ord.indexOf(b.subId);
@@ -600,8 +613,8 @@ function initApp(monday) {
     }
 
     let data = allData;
-    // Filtro pessoa
-    if(selPerson) data = data.filter(p => p.person === selPerson);
+    // Filtro pessoa (multi)
+    if(selPersons.length > 0) data = data.filter(p => selPersons.includes(p.person));
     // Filtro search + tipo (sem modificar allData)
     if(searchQuery || selTipo || selSetor) {
       data = data.map(p => ({
@@ -1008,10 +1021,47 @@ function initApp(monday) {
   }
 
   function populateFilter() {
-    const sel=document.getElementById('fperson'); const cur=sel.value;
-    const names=[...new Set(allData.map(p=>p.person))].sort((a,b)=>a.localeCompare(b));
-    sel.innerHTML='<option value="">Todas as pessoas</option>';
-    names.forEach(n=>{ const o=document.createElement('option'); o.value=n; o.textContent=n; if(n===cur) o.selected=true; sel.appendChild(o); });
+    const dd = document.getElementById('fperson-dd');
+    const names = [...new Set(allData.map(p=>p.person))].sort((a,b)=>a.localeCompare(b));
+    dd.innerHTML = '';
+    // "Todas" option
+    const allLbl = document.createElement('label'); allLbl.className='fperson-all';
+    const allCk = document.createElement('input'); allCk.type='checkbox'; allCk.id='fperson-all';
+    allCk.checked = selPersons.length === 0;
+    allLbl.appendChild(allCk); allLbl.appendChild(document.createTextNode(' Todas as pessoas'));
+    dd.appendChild(allLbl);
+    allCk.addEventListener('change', () => {
+      if(allCk.checked) {
+        selPersons = [];
+        dd.querySelectorAll('input[data-person]').forEach(c => c.checked=false);
+      }
+      updatePersonBtn(); savePerson(); render();
+    });
+    names.forEach(name => {
+      const lbl = document.createElement('label');
+      const ck = document.createElement('input'); ck.type='checkbox'; ck.dataset.person=name;
+      ck.checked = selPersons.includes(name);
+      lbl.appendChild(ck); lbl.appendChild(document.createTextNode(' '+name));
+      lbl.addEventListener('change', () => {
+        if(ck.checked) { if(!selPersons.includes(name)) selPersons.push(name); }
+        else { selPersons = selPersons.filter(p=>p!==name); }
+        allCk.checked = selPersons.length === 0;
+        updatePersonBtn(); savePerson(); render();
+      });
+      dd.appendChild(lbl);
+    });
+    updatePersonBtn();
+  }
+
+  function updatePersonBtn() {
+    const btn = document.getElementById('fperson-btn');
+    btn.textContent = selPersons.length === 0
+      ? 'Todas as pessoas'
+      : selPersons.length === 1 ? selPersons[0] : `${selPersons.length} pessoas`;
+  }
+
+  function savePerson() {
+    localStorage.setItem('filter_persons_9mm', JSON.stringify(selPersons));
   }
 
   function populateTipo() {
@@ -1092,7 +1142,11 @@ function initApp(monday) {
     render();
   });
 
-  document.getElementById('fperson').addEventListener('change', e=>{ selPerson=e.target.value; localStorage.setItem('filter_person_9mm', selPerson); render(); });
+  // Multi-select pessoa — toggle dropdown
+  const fpersonBtn = document.getElementById('fperson-btn');
+  const fpersonDd  = document.getElementById('fperson-dd');
+  fpersonBtn.addEventListener('click', e => { e.stopPropagation(); fpersonDd.classList.toggle('open'); });
+  document.addEventListener('click', e => { if(!fpersonDd.contains(e.target) && e.target!==fpersonBtn) fpersonDd.classList.remove('open'); });
   document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; localStorage.setItem('filter_tipo_9mm', selTipo); render(); });
   document.getElementById('fsetor').addEventListener('change', e=>{ selSetor=e.target.value; localStorage.setItem('filter_setor_9mm', selSetor); render(); });
 
@@ -1136,9 +1190,15 @@ function initApp(monday) {
   monday.listen('context', async res => {
     const boardId = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
     currentBoardId = boardId;
-    const currentUserId = res.data.user?.id;
+    const currentUserId   = res.data.user?.id;
+    const currentUserName = res.data.user?.name || '';
     isAdmin = !ADMIN_USER_ID || String(currentUserId) === String(ADMIN_USER_ID);
-    if(isAdmin) document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');
+    if(isAdmin) {
+      document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');
+    } else {
+      // Membro normal → filtra automaticamente para a sua própria linha
+      selPersons = currentUserName ? [currentUserName] : [];
+    }
 
     try {
       const items = await fetchData(boardId);
@@ -1147,11 +1207,13 @@ function initApp(monday) {
       populateFilter();
       populateTipo();
       populateSetor();
-      // Restaura filtros salvos
-      document.getElementById('fperson').value = selPerson;
-      document.getElementById('ftipo').value   = selTipo;
-      document.getElementById('fsetor').value  = selSetor;
-      document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort===sortMode));
+      // Restaura filtros salvos (só para admins)
+      if(isAdmin) {
+        document.getElementById('ftipo').value   = selTipo;
+        document.getElementById('fsetor').value  = selSetor;
+        updatePersonBtn();
+        document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort===sortMode));
+      }
       document.getElementById('loading').style.display='none';
       document.getElementById('tl-outer').style.display='flex';
       render();
