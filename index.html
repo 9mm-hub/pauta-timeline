@@ -128,8 +128,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
       <input type="text" id="fsearch" placeholder="🔍 Pesquisar job..."/>
       <button id="fsearch-clear" title="Limpar">✕</button>
     </div>
-    <select id="ftipo"><option value="">Todos os tipos</option></select>
-    <select id="fsetor"><option value="">Todos os setores</option></select>
+    <select id="ftipo" class="admin-only"><option value="">Todos os tipos</option></select>
+    <select id="fsetor" class="admin-only"><option value="">Todos os setores</option></select>
     <select id="fperson" class="admin-only"><option value="">Todas as pessoas</option></select>
     <button id="bcfg" class="admin-only">&#128197; Feriados</button>
     <button id="bpesos" class="admin-only">&#9881; Pesos</button>
@@ -220,7 +220,11 @@ function initApp(monday) {
   const WEEK_PX = DAY_W * 7;
 
   let allData = [], personOrder = [], isAdmin = false;
-  let selPerson = '', searchQuery = '', selTipo = '', selSetor = '', sortMode = 'custom';
+  let selPerson = localStorage.getItem('filter_person_9mm') || '';
+  let searchQuery = '';
+  let selTipo   = localStorage.getItem('filter_tipo_9mm')   || '';
+  let selSetor  = localStorage.getItem('filter_setor_9mm')  || '';
+  let sortMode  = localStorage.getItem('filter_sort_9mm')   || 'custom';
   let userPhotoMap = {};
   let holidays  = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
   let defaultHs = parseInt(localStorage.getItem('default_hs_9mm') || '8');
@@ -1083,13 +1087,14 @@ function initApp(monday) {
     const btn = e.target.closest('.sort-btn');
     if(!btn) return;
     sortMode = btn.dataset.sort;
+    localStorage.setItem('filter_sort_9mm', sortMode);
     document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b===btn));
     render();
   });
 
-  document.getElementById('fperson').addEventListener('change', e=>{ selPerson=e.target.value; render(); });
-  document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; render(); });
-  document.getElementById('fsetor').addEventListener('change', e=>{ selSetor=e.target.value; render(); });
+  document.getElementById('fperson').addEventListener('change', e=>{ selPerson=e.target.value; localStorage.setItem('filter_person_9mm', selPerson); render(); });
+  document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; localStorage.setItem('filter_tipo_9mm', selTipo); render(); });
+  document.getElementById('fsetor').addEventListener('change', e=>{ selSetor=e.target.value; localStorage.setItem('filter_setor_9mm', selSetor); render(); });
 
   const fsearch = document.getElementById('fsearch');
   const fsearchClear = document.getElementById('fsearch-clear');
@@ -1142,6 +1147,11 @@ function initApp(monday) {
       populateFilter();
       populateTipo();
       populateSetor();
+      // Restaura filtros salvos
+      document.getElementById('fperson').value = selPerson;
+      document.getElementById('ftipo').value   = selTipo;
+      document.getElementById('fsetor').value  = selSetor;
+      document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort===sortMode));
       document.getElementById('loading').style.display='none';
       document.getElementById('tl-outer').style.display='flex';
       render();
