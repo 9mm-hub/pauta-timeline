@@ -233,11 +233,11 @@ function initApp(monday) {
   const WEEK_PX = DAY_W * 7;
 
   let allData = [], personOrder = [], isAdmin = false;
-  let selPersons = JSON.parse(localStorage.getItem('filter_persons_9mm') || '[]');
+  let selPersons = [];
   let searchQuery = '';
-  let selTipo   = localStorage.getItem('filter_tipo_9mm')   || '';
-  let selSetor  = localStorage.getItem('filter_setor_9mm')  || '';
-  let sortMode  = localStorage.getItem('filter_sort_9mm')   || 'custom';
+  let selTipo  = '';
+  let selSetor = '';
+  let sortMode = 'custom';
   let userPhotoMap = {};
   let holidays  = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
   let defaultHs = parseInt(localStorage.getItem('default_hs_9mm') || '8');
@@ -1035,7 +1035,7 @@ function initApp(monday) {
         selPersons = [];
         dd.querySelectorAll('input[data-person]').forEach(c => c.checked=false);
       }
-      updatePersonBtn(); savePerson(); render();
+      updatePersonBtn(); render();
     });
     names.forEach(name => {
       const lbl = document.createElement('label');
@@ -1046,7 +1046,7 @@ function initApp(monday) {
         if(ck.checked) { if(!selPersons.includes(name)) selPersons.push(name); }
         else { selPersons = selPersons.filter(p=>p!==name); }
         allCk.checked = selPersons.length === 0;
-        updatePersonBtn(); savePerson(); render();
+        updatePersonBtn(); render();
       });
       dd.appendChild(lbl);
     });
@@ -1060,9 +1060,6 @@ function initApp(monday) {
       : selPersons.length === 1 ? selPersons[0] : `${selPersons.length} pessoas`;
   }
 
-  function savePerson() {
-    localStorage.setItem('filter_persons_9mm', JSON.stringify(selPersons));
-  }
 
   function populateTipo() {
     const sel=document.getElementById('ftipo'); const cur=sel.value;
@@ -1137,7 +1134,6 @@ function initApp(monday) {
     const btn = e.target.closest('.sort-btn');
     if(!btn) return;
     sortMode = btn.dataset.sort;
-    localStorage.setItem('filter_sort_9mm', sortMode);
     document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b===btn));
     render();
   });
@@ -1147,8 +1143,8 @@ function initApp(monday) {
   const fpersonDd  = document.getElementById('fperson-dd');
   fpersonBtn.addEventListener('click', e => { e.stopPropagation(); fpersonDd.classList.toggle('open'); });
   document.addEventListener('click', e => { if(!fpersonDd.contains(e.target) && e.target!==fpersonBtn) fpersonDd.classList.remove('open'); });
-  document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; localStorage.setItem('filter_tipo_9mm', selTipo); render(); });
-  document.getElementById('fsetor').addEventListener('change', e=>{ selSetor=e.target.value; localStorage.setItem('filter_setor_9mm', selSetor); render(); });
+  document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; render(); });
+  document.getElementById('fsetor').addEventListener('change', e=>{ selSetor=e.target.value; render(); });
 
   const fsearch = document.getElementById('fsearch');
   const fsearchClear = document.getElementById('fsearch-clear');
