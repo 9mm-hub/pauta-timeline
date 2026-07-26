@@ -4,7 +4,6 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
 <title>Visualização de Pauta</title>
-<script src="https://cdn.jsdelivr.net/npm/monday-sdk-js@0.3.7/dist/monday-sdk-js.min.js"></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#1c1f2e;color:#e0e0e0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
@@ -17,6 +16,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .admin-only{display:none}
 #bcfg{background:#2e3150;border:1px solid #3d4270;color:#ccc;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px}
 #bcfg:hover{background:#3d4270}
+#bpesos{background:#2e3150;border:1px solid #3d4270;color:#ccc;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px}
+#bpesos:hover{background:#3d4270}
 #tl-wrap{flex:1;overflow:auto}
 #tl-scroll{min-width:700px}
 .days-header{display:flex;margin-left:150px;border-bottom:1px solid #2e3150}
@@ -43,12 +44,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .blk-job{font-weight:600;font-size:10px;line-height:1.3;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .blk-tp{font-size:9px;color:rgba(255,255,255,0.75);margin-top:1px}
 .blk-ow{font-size:9px;color:#fff;margin-top:2px}
-#loading{flex:1;display:flex;align-items:center;justify-content:center;font-size:14px;color:#666}
-.spinner{width:28px;height:28px;border:3px solid #2e3150;border-top-color:#7c83f5;border-radius:50%;animation:spin .8s linear infinite;margin-right:10px}
+#loading{flex:1;display:flex;align-items:center;justify-content:center;font-size:14px;color:#666;flex-direction:column;gap:12px}
+.spinner{width:28px;height:28px;border:3px solid #2e3150;border-top-color:#7c83f5;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 #modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center}
 #modal-overlay.open{display:flex}
-#modal{background:#23263a;border:1px solid #3d4270;border-radius:12px;padding:20px;min-width:300px;box-shadow:0 8px 32px rgba(0,0,0,0.5)}
+#modal{background:#23263a;border:1px solid #3d4270;border-radius:12px;padding:20px;min-width:300px}
 #modal h3{font-size:14px;font-weight:500;margin-bottom:14px;color:#fff}
 #holiday-list{margin-bottom:12px;display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto}
 .h-item{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:#ddd;background:#1c1f2e;padding:6px 10px;border-radius:6px}
@@ -56,9 +57,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #holiday-add{display:flex;gap:6px}
 #holiday-input{flex:1;background:#1c1f2e;border:1px solid #3d4270;color:#fff;padding:5px 8px;border-radius:6px;font-size:12px}
 #btn-add-h{background:#7c83f5;color:#fff;border:none;padding:5px 12px;border-radius:6px;cursor:pointer;font-size:12px}
-#btn-add-h:hover{background:#5c64d4}
 #btn-close-modal{width:100%;margin-top:12px;padding:8px;background:#2e3150;border:1px solid #3d4270;color:#ccc;border-radius:6px;cursor:pointer;font-size:12px}
-#btn-close-modal:hover{background:#3d4270}
 #weights-panel{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center}
 #weights-panel.open{display:flex}
 #weights-box{background:#23263a;border:1px solid #3d4270;border-radius:12px;padding:20px;min-width:300px}
@@ -67,7 +66,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .w-row label{font-size:13px;color:#ccc}
 .w-row input{width:70px;background:#1c1f2e;border:1px solid #3d4270;color:#fff;padding:5px 8px;border-radius:6px;font-size:13px;text-align:center}
 #btn-save-w{width:100%;margin-top:4px;padding:8px;background:#7c83f5;border:none;color:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
-#btn-save-w:hover{background:#5c64d4}
 #btn-close-w{width:100%;margin-top:8px;padding:7px;background:#2e3150;border:1px solid #3d4270;color:#ccc;border-radius:6px;cursor:pointer;font-size:12px}
 </style>
 </head>
@@ -79,9 +77,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button class="nav" id="bn">&#8594;</button>
     <select id="fperson" class="admin-only"><option value="">Todos</option></select>
     <button id="bcfg" class="admin-only">&#128197; Feriados</button>
-    <button id="bpesos" class="admin-only" style="background:#2e3150;border:1px solid #3d4270;color:#ccc;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px">&#9881; Pesos</button>
+    <button id="bpesos" class="admin-only">&#9881; Pesos</button>
   </div>
-  <div id="loading"><div class="spinner"></div>Carregando...</div>
+  <div id="loading"><div class="spinner"></div><span>Carregando...</span></div>
   <div id="tl-wrap" style="display:none"><div id="tl-scroll">
     <div class="days-header" id="days-header"></div>
     <div id="rows"></div>
@@ -110,302 +108,262 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 </div>
 
 <script>
-const monday = mondaySdk();
+// Carrega o SDK do Monday dinamicamente
+(function() {
+  var script = document.createElement('script');
+  script.src = 'https://cdn.jsdelivr.net/npm/monday-sdk-js@0.3.7/dist/monday-sdk-js.min.js';
+  script.onload = function() {
+    if (typeof mondaySdk === 'function') {
+      initApp(mondaySdk());
+    } else if (window.mondaySdk) {
+      initApp(window.mondaySdk());
+    } else {
+      document.getElementById('loading').innerHTML = '<span style="color:#ef5350">Erro: SDK não carregou. Tente recarregar.</span>';
+    }
+  };
+  script.onerror = function() {
+    document.getElementById('loading').innerHTML = '<span style="color:#ef5350">Erro ao carregar SDK.</span>';
+  };
+  document.head.appendChild(script);
+})();
 
-// ── CONFIG ───────────────────────────────────────────────
-const ADMIN_USER_ID = null; // será preenchido com o ID real da Pri após primeiro login
-const DAYS_PT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-const MON_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-const PALETTE = ['#5c7cfa','#e64d8a','#f08c00','#2f9e44','#7048e8','#1098ad','#e03131','#5c940d','#1971c2','#c67c04','#9c36b5','#d6336c'];
-const DEFAULT_WEIGHTS = {'Redator':4,'Dir. Arte':6,'Revisão':1,'Arte Final':6,'Mídia':4,'Performance':4,'Digital':4,'Produção':4};
+function initApp(monday) {
+  const ADMIN_USER_ID = null;
+  const DAYS_PT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
+  const MON_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
+  const PALETTE = ['#5c7cfa','#e64d8a','#f08c00','#2f9e44','#7048e8','#1098ad','#e03131','#5c940d','#1971c2','#c67c04','#9c36b5','#d6336c'];
+  const DEFAULT_WEIGHTS = {'Redator':4,'Dir. Arte':6,'Revisão':1,'Arte Final':6,'Mídia':4,'Performance':4,'Digital':4,'Produção':4};
 
-let wOff = 0, selPerson = '';
-let allData = [], personOrder = [];
-let boardId = null, currentUserId = null;
-let isAdmin = false;
+  let wOff = 0, selPerson = '';
+  let allData = [], personOrder = [];
+  let isAdmin = false;
 
-let holidays = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
-let weights = JSON.parse(localStorage.getItem('pesos_9mm') || 'null') || {...DEFAULT_WEIGHTS};
+  let holidays = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
+  let weights = JSON.parse(localStorage.getItem('pesos_9mm') || 'null') || {...DEFAULT_WEIGHTS};
 
-const cliColors = {}; let ci = 0;
-function cliColor(c) { if(!cliColors[c]){ cliColors[c] = PALETTE[ci % PALETTE.length]; ci++; } return cliColors[c]; }
-const avColors = ['#5c7cfa','#f06595','#ffa94d','#51cf66','#cc5de8','#22b8cf','#ff6b6b','#74c0fc'];
-const avMap = {}; let ai = 0;
-function avColor(n) { if(!avMap[n]){ avMap[n] = avColors[ai % avColors.length]; ai++; } return avMap[n]; }
-function initials(n) { return (n||'?').split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase(); }
+  const cliColors = {}; let ci = 0;
+  function cliColor(c) { if(!cliColors[c]){ cliColors[c] = PALETTE[ci % PALETTE.length]; ci++; } return cliColors[c]; }
+  const avColors = ['#5c7cfa','#f06595','#ffa94d','#51cf66','#cc5de8','#22b8cf','#ff6b6b','#74c0fc'];
+  const avMap = {}; let ai = 0;
+  function avColor(n) { if(!avMap[n]){ avMap[n] = avColors[ai % avColors.length]; ai++; } return avMap[n]; }
+  function initials(n) { return (n||'?').split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase(); }
 
-function getWeek(off) {
-  const t = new Date(); const d = t.getDay();
-  const mon = new Date(t); mon.setDate(t.getDate() - (d===0?6:d-1) + off*7);
-  return Array.from({length:7}, (_,i) => { const x = new Date(mon); x.setDate(mon.getDate()+i); return x; });
-}
-function fmtD(d) { return d.toISOString().split('T')[0]; }
-function isToday(d) { return fmtD(d) === fmtD(new Date()); }
-function isWknd(d) { return d.getDay()===0 || d.getDay()===6; }
-function isHoliday(d) { return holidays.includes(fmtD(d)); }
-function isBlocked(d) { return isWknd(d) || isHoliday(d); }
+  function getWeek(off) {
+    const t = new Date(); const d = t.getDay();
+    const mon = new Date(t); mon.setDate(t.getDate() - (d===0?6:d-1) + off*7);
+    return Array.from({length:7}, (_,i) => { const x = new Date(mon); x.setDate(mon.getDate()+i); return x; });
+  }
+  function fmtD(d) { return d.toISOString().split('T')[0]; }
+  function isToday(d) { return fmtD(d) === fmtD(new Date()); }
+  function isWknd(d) { return d.getDay()===0 || d.getDay()===6; }
+  function isHoliday(d) { return holidays.includes(fmtD(d)); }
+  function isBlocked(d) { return isWknd(d) || isHoliday(d); }
 
-const ROW_H = 80, PAD = 3;
+  const ROW_H = 80, PAD = 3;
 
-// ── FETCH ────────────────────────────────────────────────
-async function fetchData(bId) {
-  const query = `
-    query {
-      boards(ids: [${bId}]) {
-        items_page(limit: 200) {
-          items {
-            id name
-            subitems {
-              id name
-              column_values { id title text value }
-            }
+  async function fetchData(bId) {
+    const query = `query { boards(ids: [${bId}]) { items_page(limit: 200) { items { id name subitems { id name column_values { id title text value } } } } } }`;
+    const res = await monday.api(query);
+    return res.data.boards[0].items_page.items;
+  }
+
+  function parseRange(str) {
+    if(!str) return null;
+    str = str.trim();
+    if(str.match(/^\d{4}-\d{2}-\d{2}$/)) return { start: new Date(str+'T12:00:00'), end: new Date(str+'T12:00:00') };
+    const iso = str.match(/(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})/);
+    if(iso) return { start: new Date(iso[1]+'T12:00:00'), end: new Date(iso[2]+'T12:00:00') };
+    const MONTHS = {jan:0,fev:1,mar:2,abr:3,mai:4,jun:5,jul:6,ago:7,set:8,out:9,nov:10,dez:11};
+    function parsePT(s) {
+      s = s.trim().toLowerCase();
+      const m = s.match(/^(\d+)\s+([a-z]+)(?:\s+(\d{4}))?$/);
+      if(!m) return null;
+      const mo = MONTHS[m[2].slice(0,3)];
+      if(mo===undefined) return null;
+      return new Date(m[3]?parseInt(m[3]):new Date().getFullYear(), mo, parseInt(m[1]), 12);
+    }
+    if(str.includes(' - ')) { const p=str.split(' - '); const s=parsePT(p[0]),e=parsePT(p[1]); if(s&&e) return {start:s,end:e}; }
+    const d = parsePT(str);
+    return d ? {start:d, end:d} : null;
+  }
+
+  function processItems(items) {
+    const personMap = {};
+    items.forEach(item => {
+      const jobName = item.name || '';
+      const clientCode = jobName.slice(0,3).toUpperCase();
+      (item.subitems || []).forEach(sub => {
+        const cols = {};
+        sub.column_values.forEach(c => { cols[c.title] = c.text; });
+        const resp = cols['Resp.'] || cols['Responsável'] || cols['Resp'] || '';
+        const cronograma = cols['Cronograma'] || '';
+        const tipo = cols['Tipo'] || '';
+        const status = cols['Status'] || '';
+        const hsRaw = parseInt(cols['HS'] || '0');
+        const hs = hsRaw > 0 ? hsRaw : (weights[tipo] || 4);
+        if(!resp || !cronograma) return;
+        const range = parseRange(cronograma);
+        if(!range) return;
+        if(!personMap[resp]) personMap[resp] = { person: resp, subitems: [] };
+        personMap[resp].subitems.push({ itemId: item.id, jobName, clientCode, tipo, status, hs, range });
+      });
+    });
+    return Object.values(personMap);
+  }
+
+  function render() {
+    const days = getWeek(wOff);
+    const s = days[0], e = days[6];
+    document.getElementById('wlbl').textContent = `${s.getDate()} ${MON_PT[s.getMonth()]} – ${e.getDate()} ${MON_PT[e.getMonth()]} ${e.getFullYear()}`;
+    let data = selPerson ? allData.filter(p => p.person === selPerson) : allData;
+    data = [...data].sort((a,b) => {
+      const ia = personOrder.indexOf(a.person), ib = personOrder.indexOf(b.person);
+      if(ia===-1&&ib===-1) return 0; if(ia===-1) return 1; if(ib===-1) return -1; return ia - ib;
+    });
+    const dh = document.getElementById('days-header'); dh.innerHTML = '';
+    days.forEach(d => {
+      const el = document.createElement('div');
+      el.className = 'dh'+(isToday(d)?' today':'')+(isWknd(d)?' wknd':'')+(isHoliday(d)?' holiday':'');
+      el.innerHTML = `${DAYS_PT[d.getDay()]}<span>${d.getDate()}</span>`;
+      dh.appendChild(el);
+    });
+    const rows = document.getElementById('rows'); rows.innerHTML = '';
+    data.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'prow'; row.style.minHeight = ROW_H + 'px';
+      const nc = document.createElement('div'); nc.className = 'pname';
+      nc.draggable = true; nc.dataset.person = p.person;
+      const av = document.createElement('div'); av.className = 'av';
+      av.style.background = avColor(p.person); av.textContent = initials(p.person);
+      const ns = document.createElement('div'); ns.className = 'pname-text'; ns.textContent = p.person;
+      nc.appendChild(av); nc.appendChild(ns); row.appendChild(nc);
+      nc.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', p.person); nc.style.opacity='0.4'; });
+      nc.addEventListener('dragend', () => { nc.style.opacity='1'; });
+      nc.addEventListener('dragover', e => { e.preventDefault(); nc.style.background='#2e3150'; });
+      nc.addEventListener('dragleave', () => { nc.style.background=''; });
+      nc.addEventListener('drop', e => {
+        e.preventDefault(); nc.style.background='';
+        const from = e.dataTransfer.getData('text/plain'), to = p.person;
+        if(from===to) return;
+        if(!personOrder.length) personOrder = data.map(d=>d.person);
+        const fi = personOrder.indexOf(from);
+        if(fi>-1) personOrder.splice(fi,1);
+        personOrder.splice(personOrder.indexOf(to), 0, from);
+        localStorage.setItem('order_9mm', JSON.stringify(personOrder));
+        render();
+      });
+      const pdays = document.createElement('div'); pdays.className = 'pdays'; pdays.style.position = 'relative';
+      days.forEach(d => {
+        const cell = document.createElement('div');
+        cell.className = 'pdcell'+(isToday(d)?' today-col':'')+(isWknd(d)?' wknd-col':'')+(isHoliday(d)?' holiday-col':'');
+        pdays.appendChild(cell);
+      });
+      row.appendChild(pdays); rows.appendChild(row);
+      const slots = [];
+      p.subitems.forEach(sub => {
+        let colStart=-1, colEnd=-1;
+        days.forEach((d,i) => {
+          const ds=fmtD(d), ss=fmtD(sub.range.start), se=fmtD(sub.range.end);
+          if(ds>=ss && ds<=se && !isBlocked(d)) { if(colStart===-1) colStart=i; colEnd=i; }
+        });
+        if(colStart===-1) return;
+        const hs = Math.min(sub.hs,7); const over = sub.hs>7;
+        const blkH = Math.round((ROW_H-PAD*2)*(hs/7));
+        let topOffset = PAD, placed = false;
+        for(let si=0; si<slots.length; si++) {
+          const conflict = slots[si].some(r => !(colEnd<r.cs || colStart>r.ce));
+          if(!conflict) {
+            topOffset = slots[si].reduce((acc,r) => Math.max(acc, r.top+r.h+2), PAD);
+            slots[si].push({cs:colStart,ce:colEnd,top:topOffset,h:blkH}); placed=true; break;
           }
         }
-      }
-    }`;
-  const res = await monday.api(query);
-  return res.data.boards[0].items_page.items;
-}
-
-function parseRange(str) {
-  if(!str) return null;
-  str = str.trim();
-  // formato monday: "2026-07-15" ou "2026-07-15 - 2026-07-23"
-  if(str.match(/^\d{4}-\d{2}-\d{2}$/)) return { start: new Date(str+'T12:00:00'), end: new Date(str+'T12:00:00') };
-  const iso = str.match(/(\d{4}-\d{2}-\d{2})\s*-\s*(\d{4}-\d{2}-\d{2})/);
-  if(iso) return { start: new Date(iso[1]+'T12:00:00'), end: new Date(iso[2]+'T12:00:00') };
-  // formato PT: "15 jul" ou "15 - 23 jul" ou "15 jul - 23 ago"
-  const MONTHS = {jan:0,fev:1,mar:2,abr:3,mai:4,jun:5,jul:6,ago:7,set:8,out:9,nov:10,dez:11};
-  function parsePT(s) {
-    s = s.trim().toLowerCase();
-    const m = s.match(/^(\d+)\s+([a-z]+)(?:\s+(\d{4}))?$/);
-    if(!m) return null;
-    const mo = MONTHS[m[2].slice(0,3)];
-    if(mo===undefined) return null;
-    const yr = m[3] ? parseInt(m[3]) : new Date().getFullYear();
-    return new Date(yr, mo, parseInt(m[1]), 12);
-  }
-  if(str.includes(' - ')) {
-    const parts = str.split(' - ');
-    const s = parsePT(parts[0]), e = parsePT(parts[1]);
-    if(s&&e) return {start:s, end:e};
-  }
-  const d = parsePT(str);
-  return d ? {start:d, end:d} : null;
-}
-
-function processItems(items) {
-  const personMap = {};
-  items.forEach(item => {
-    const jobName = item.name || '';
-    const clientCode = jobName.slice(0,3).toUpperCase();
-    (item.subitems || []).forEach(sub => {
-      const cols = {};
-      sub.column_values.forEach(c => { cols[c.title] = c.text; });
-      const resp = cols['Resp.'] || cols['Responsável'] || cols['Resp'] || '';
-      const cronograma = cols['Cronograma'] || '';
-      const tipo = cols['Tipo'] || '';
-      const status = cols['Status'] || '';
-      const hsRaw = parseInt(cols['HS'] || '0');
-      const hs = hsRaw > 0 ? hsRaw : (weights[tipo] || 4);
-      if(!resp || !cronograma) return;
-      const range = parseRange(cronograma);
-      if(!range) return;
-      if(!personMap[resp]) personMap[resp] = { person: resp, subitems: [] };
-      personMap[resp].subitems.push({
-        itemId: item.id, subId: sub.id,
-        jobName, clientCode, tipo, status, hs, range
-      });
-    });
-  });
-  return Object.values(personMap);
-}
-
-// ── RENDER ───────────────────────────────────────────────
-function render() {
-  const days = getWeek(wOff);
-  const s = days[0], e = days[6];
-  document.getElementById('wlbl').textContent =
-    `${s.getDate()} ${MON_PT[s.getMonth()]} – ${e.getDate()} ${MON_PT[e.getMonth()]} ${e.getFullYear()}`;
-
-  let data = selPerson ? allData.filter(p => p.person === selPerson) : allData;
-  data = [...data].sort((a,b) => {
-    const ia = personOrder.indexOf(a.person), ib = personOrder.indexOf(b.person);
-    if(ia===-1&&ib===-1) return 0; if(ia===-1) return 1; if(ib===-1) return -1;
-    return ia - ib;
-  });
-
-  // header
-  const dh = document.getElementById('days-header'); dh.innerHTML = '';
-  days.forEach(d => {
-    const el = document.createElement('div');
-    el.className = 'dh' + (isToday(d)?' today':'') + (isWknd(d)?' wknd':'') + (isHoliday(d)?' holiday':'');
-    el.innerHTML = `${DAYS_PT[d.getDay()]}<span>${d.getDate()}</span>`;
-    dh.appendChild(el);
-  });
-
-  const rows = document.getElementById('rows'); rows.innerHTML = '';
-
-  data.forEach(p => {
-    const row = document.createElement('div');
-    row.className = 'prow'; row.style.minHeight = ROW_H + 'px';
-
-    // nome
-    const nc = document.createElement('div'); nc.className = 'pname';
-    nc.draggable = true; nc.dataset.person = p.person;
-    const av = document.createElement('div'); av.className = 'av';
-    av.style.background = avColor(p.person); av.textContent = initials(p.person);
-    const ns = document.createElement('div'); ns.className = 'pname-text'; ns.textContent = p.person;
-    nc.appendChild(av); nc.appendChild(ns); row.appendChild(nc);
-
-    // drag
-    nc.addEventListener('dragstart', e => { e.dataTransfer.setData('text/plain', p.person); nc.style.opacity='0.4'; });
-    nc.addEventListener('dragend', () => { nc.style.opacity='1'; });
-    nc.addEventListener('dragover', e => { e.preventDefault(); nc.style.background='#2e3150'; });
-    nc.addEventListener('dragleave', () => { nc.style.background=''; });
-    nc.addEventListener('drop', e => {
-      e.preventDefault(); nc.style.background='';
-      const from = e.dataTransfer.getData('text/plain'), to = p.person;
-      if(from===to) return;
-      if(!personOrder.length) personOrder = data.map(d=>d.person);
-      const fi = personOrder.indexOf(from), ti = personOrder.indexOf(to);
-      if(fi>-1) personOrder.splice(fi,1);
-      personOrder.splice(personOrder.indexOf(to), 0, from);
-      localStorage.setItem('order_9mm', JSON.stringify(personOrder));
-      render();
-    });
-
-    // área de dias
-    const pdays = document.createElement('div'); pdays.className = 'pdays'; pdays.style.position = 'relative';
-    days.forEach(d => {
-      const cell = document.createElement('div');
-      cell.className = 'pdcell' + (isToday(d)?' today-col':'') + (isWknd(d)?' wknd-col':'') + (isHoliday(d)?' holiday-col':'');
-      pdays.appendChild(cell);
-    });
-    row.appendChild(pdays); rows.appendChild(row);
-
-    // blocos
-    const slots = [];
-    p.subitems.forEach(sub => {
-      let colStart=-1, colEnd=-1;
-      days.forEach((d,i) => {
-        const ds=fmtD(d), ss=fmtD(sub.range.start), se=fmtD(sub.range.end);
-        if(ds>=ss && ds<=se && !isBlocked(d)) { if(colStart===-1) colStart=i; colEnd=i; }
-      });
-      if(colStart===-1) return;
-
-      const hs = Math.min(sub.hs,7); const over = sub.hs>7;
-      const blkH = Math.round((ROW_H-PAD*2)*(hs/7));
-
-      let topOffset = PAD, placed = false;
-      for(let si=0; si<slots.length; si++) {
-        const conflict = slots[si].some(r => !(colEnd<r.cs || colStart>r.ce));
-        if(!conflict) {
-          topOffset = slots[si].reduce((acc,r) => Math.max(acc, r.top+r.h+2), PAD);
-          slots[si].push({cs:colStart,ce:colEnd,top:topOffset,h:blkH});
-          placed=true; break;
+        if(!placed) {
+          topOffset = slots.reduce((acc,lane) => {
+            const lc = lane.some(r => !(colEnd<r.cs || colStart>r.ce));
+            return lc ? Math.max(acc, lane[lane.length-1].top+lane[lane.length-1].h+2) : acc;
+          }, PAD);
+          slots.push([{cs:colStart,ce:colEnd,top:topOffset,h:blkH}]);
         }
-      }
-      if(!placed) {
-        topOffset = slots.reduce((acc,lane) => {
-          const lc = lane.some(r => !(colEnd<r.cs || colStart>r.ce));
-          return lc ? Math.max(acc, lane[lane.length-1].top+lane[lane.length-1].h+2) : acc;
-        }, PAD);
-        slots.push([{cs:colStart,ce:colEnd,top:topOffset,h:blkH}]);
-      }
-
-      const leftPct = (colStart/7)*100, widthPct = ((colEnd-colStart+1)/7)*100;
-      const blk = document.createElement('div');
-      blk.className = 'blk' + (over?' over':'');
-      blk.style.cssText = `left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px);top:${topOffset}px;height:${blkH}px;background:${cliColor(sub.clientCode)};`;
-      blk.innerHTML = `<div class="blk-job">${sub.jobName}</div><div class="blk-tp">${sub.tipo}</div>${over?'<div class="blk-ow">&#9888; acima da capacidade</div>':''}`;
-
-      // abrir subitem ao clicar
-      blk.addEventListener('click', () => {
-        monday.execute('openItemCard', { itemId: parseInt(sub.itemId) });
+        const leftPct = (colStart/7)*100, widthPct = ((colEnd-colStart+1)/7)*100;
+        const blk = document.createElement('div');
+        blk.className = 'blk'+(over?' over':'');
+        blk.style.cssText = `left:calc(${leftPct}% + 2px);width:calc(${widthPct}% - 4px);top:${topOffset}px;height:${blkH}px;background:${cliColor(sub.clientCode)};`;
+        blk.innerHTML = `<div class="blk-job">${sub.jobName}</div><div class="blk-tp">${sub.tipo}</div>${over?'<div class="blk-ow">&#9888; acima da capacidade</div>':''}`;
+        blk.addEventListener('click', () => { monday.execute('openItemCard', { itemId: parseInt(sub.itemId) }); });
+        pdays.appendChild(blk);
+        const needed = topOffset+blkH+PAD;
+        if(needed > parseInt(row.style.minHeight)) row.style.minHeight = needed+'px';
       });
-
-      pdays.appendChild(blk);
-      const needed = topOffset+blkH+PAD;
-      if(needed > parseInt(row.style.minHeight)) row.style.minHeight = needed+'px';
     });
-  });
-}
-
-// ── FILTRO ───────────────────────────────────────────────
-function populateFilter() {
-  const sel = document.getElementById('fperson');
-  const cur = sel.value;
-  sel.innerHTML = '<option value="">Todos</option>';
-  allData.forEach(p => {
-    const o = document.createElement('option'); o.value=p.person; o.textContent=p.person;
-    if(p.person===cur) o.selected=true;
-    sel.appendChild(o);
-  });
-}
-
-// ── FERIADOS ─────────────────────────────────────────────
-function renderHolidayList() {
-  const list = document.getElementById('holiday-list'); list.innerHTML='';
-  if(!holidays.length) { list.innerHTML='<span style="font-size:12px;color:#666">Nenhum feriado cadastrado.</span>'; return; }
-  holidays.forEach(h => {
-    const item = document.createElement('div'); item.className='h-item';
-    item.innerHTML = `<span>${h}</span><button class="h-del" data-date="${h}">&#x2715;</button>`;
-    list.appendChild(item);
-  });
-  list.querySelectorAll('.h-del').forEach(btn => {
-    btn.addEventListener('click', () => {
-      holidays = holidays.filter(x => x!==btn.dataset.date);
-      localStorage.setItem('holidays_9mm', JSON.stringify(holidays));
-      renderHolidayList(); render();
-    });
-  });
-}
-document.getElementById('btn-add-h').addEventListener('click', () => {
-  const val = document.getElementById('holiday-input').value;
-  if(val && !holidays.includes(val)) {
-    holidays.push(val); localStorage.setItem('holidays_9mm', JSON.stringify(holidays));
-    renderHolidayList(); render(); document.getElementById('holiday-input').value='';
   }
-});
-document.getElementById('bcfg').addEventListener('click', () => { renderHolidayList(); document.getElementById('modal-overlay').classList.add('open'); });
-document.getElementById('btn-close-modal').addEventListener('click', () => { document.getElementById('modal-overlay').classList.remove('open'); });
 
-// ── PESOS ────────────────────────────────────────────────
-document.getElementById('bpesos').addEventListener('click', () => {
-  const wr = document.getElementById('w-rows'); wr.innerHTML='';
-  Object.entries(weights).forEach(([tipo,val]) => {
-    const row = document.createElement('div'); row.className='w-row';
-    row.innerHTML = `<label>${tipo}</label><input type="number" data-tipo="${tipo}" value="${val}" min="1" max="20"/>`;
-    wr.appendChild(row);
+  function populateFilter() {
+    const sel = document.getElementById('fperson');
+    const cur = sel.value;
+    sel.innerHTML = '<option value="">Todos</option>';
+    allData.forEach(p => {
+      const o = document.createElement('option'); o.value=p.person; o.textContent=p.person;
+      if(p.person===cur) o.selected=true;
+      sel.appendChild(o);
+    });
+  }
+
+  function renderHolidayList() {
+    const list = document.getElementById('holiday-list'); list.innerHTML='';
+    if(!holidays.length) { list.innerHTML='<span style="font-size:12px;color:#666">Nenhum feriado cadastrado.</span>'; return; }
+    holidays.forEach(h => {
+      const item = document.createElement('div'); item.className='h-item';
+      item.innerHTML = `<span>${h}</span><button class="h-del" data-date="${h}">&#x2715;</button>`;
+      list.appendChild(item);
+    });
+    list.querySelectorAll('.h-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        holidays = holidays.filter(x => x!==btn.dataset.date);
+        localStorage.setItem('holidays_9mm', JSON.stringify(holidays));
+        renderHolidayList(); render();
+      });
+    });
+  }
+
+  document.getElementById('btn-add-h').addEventListener('click', () => {
+    const val = document.getElementById('holiday-input').value;
+    if(val && !holidays.includes(val)) {
+      holidays.push(val); localStorage.setItem('holidays_9mm', JSON.stringify(holidays));
+      renderHolidayList(); render(); document.getElementById('holiday-input').value='';
+    }
   });
-  document.getElementById('weights-panel').classList.add('open');
-});
-document.getElementById('btn-save-w').addEventListener('click', () => {
-  document.querySelectorAll('#w-rows input').forEach(inp => { weights[inp.dataset.tipo] = parseInt(inp.value)||4; });
-  localStorage.setItem('pesos_9mm', JSON.stringify(weights));
-  document.getElementById('weights-panel').classList.remove('open');
-  render();
-});
-document.getElementById('btn-close-w').addEventListener('click', () => { document.getElementById('weights-panel').classList.remove('open'); });
+  document.getElementById('bcfg').addEventListener('click', () => { renderHolidayList(); document.getElementById('modal-overlay').classList.add('open'); });
+  document.getElementById('btn-close-modal').addEventListener('click', () => { document.getElementById('modal-overlay').classList.remove('open'); });
+  document.getElementById('bpesos').addEventListener('click', () => {
+    const wr = document.getElementById('w-rows'); wr.innerHTML='';
+    Object.entries(weights).forEach(([tipo,val]) => {
+      const row = document.createElement('div'); row.className='w-row';
+      row.innerHTML = `<label>${tipo}</label><input type="number" data-tipo="${tipo}" value="${val}" min="1" max="20"/>`;
+      wr.appendChild(row);
+    });
+    document.getElementById('weights-panel').classList.add('open');
+  });
+  document.getElementById('btn-save-w').addEventListener('click', () => {
+    document.querySelectorAll('#w-rows input').forEach(inp => { weights[inp.dataset.tipo] = parseInt(inp.value)||4; });
+    localStorage.setItem('pesos_9mm', JSON.stringify(weights));
+    document.getElementById('weights-panel').classList.remove('open');
+    render();
+  });
+  document.getElementById('btn-close-w').addEventListener('click', () => { document.getElementById('weights-panel').classList.remove('open'); });
+  document.getElementById('bp').addEventListener('click', () => { wOff--; render(); });
+  document.getElementById('bn').addEventListener('click', () => { wOff++; render(); });
+  document.getElementById('fperson').addEventListener('change', e => { selPerson=e.target.value; render(); });
 
-// ── NAV ──────────────────────────────────────────────────
-document.getElementById('bp').addEventListener('click', () => { wOff--; render(); });
-document.getElementById('bn').addEventListener('click', () => { wOff++; render(); });
-document.getElementById('fperson').addEventListener('change', e => { selPerson=e.target.value; render(); });
-
-// ── INIT ─────────────────────────────────────────────────
-async function init() {
   personOrder = JSON.parse(localStorage.getItem('order_9mm') || '[]');
 
   monday.listen('context', async res => {
-    boardId = res.data.boardId;
-    currentUserId = res.data.user?.id;
-
-    // Admin: troca ADMIN_USER_ID pelo seu ID real após primeiro acesso
-    // Para descobrir seu ID, abriremos o console e veremos currentUserId
+    const boardId = res.data.boardId;
+    const currentUserId = res.data.user?.id;
     isAdmin = !ADMIN_USER_ID || String(currentUserId) === String(ADMIN_USER_ID);
     if(isAdmin) document.querySelectorAll('.admin-only').forEach(el => el.style.display='');
+
+    // Loga o ID do usuário para configurar o admin
+    console.log('User ID:', currentUserId);
 
     try {
       const items = await fetchData(boardId);
@@ -415,13 +373,11 @@ async function init() {
       document.getElementById('tl-wrap').style.display = 'block';
       render();
     } catch(err) {
-      document.getElementById('loading').innerHTML =
-        `<span style="color:#ef5350">Erro ao carregar: ${err.message}</span>`;
+      document.getElementById('loading').innerHTML = `<span style="color:#ef5350">Erro: ${err.message}</span>`;
+      console.error(err);
     }
   });
 }
-
-init();
 </script>
 </body>
 </html>
