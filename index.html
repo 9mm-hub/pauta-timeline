@@ -21,12 +21,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 /* Timeline wrapper — scrolls horizontally */
 #tl-outer{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
-#tl-wrap{flex:1;overflow:auto;cursor:grab;user-select:none}
-#tl-wrap:active{cursor:grabbing}
-#tl-wrap::-webkit-scrollbar{height:8px;width:8px}
-#tl-wrap::-webkit-scrollbar-track{background:#111}
-#tl-wrap::-webkit-scrollbar-thumb{background:#333;border-radius:4px}
-#tl-wrap::-webkit-scrollbar-thumb:hover{background:#555}
+#tl-wrap{flex:1;overflow-x:scroll;overflow-y:auto;user-select:none}
+#tl-wrap::-webkit-scrollbar{height:10px;width:10px}
+#tl-wrap::-webkit-scrollbar-track{background:#1a1a1a;border-radius:5px}
+#tl-wrap::-webkit-scrollbar-thumb{background:#555;border-radius:5px;border:2px solid #1a1a1a}
+#tl-wrap::-webkit-scrollbar-thumb:hover{background:#888}
+#tl-wrap::-webkit-scrollbar-corner{background:#1a1a1a}
 #tl-scroll{display:inline-flex;flex-direction:column;min-height:100%}
 
 .name-col{width:150px;flex-shrink:0}
@@ -58,6 +58,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .blk.over{outline:2px solid #e03131}
 .blk-job{font-weight:600;font-size:10px;line-height:1.3;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .blk-tp{font-size:9px;color:rgba(255,255,255,0.75);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.blk-st{font-size:9px;color:rgba(255,255,255,0.6);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rs-right{position:absolute;top:0;right:0;width:6px;height:100%;cursor:ew-resize;background:rgba(255,255,255,0);transition:background .15s}
+.rs-bottom{position:absolute;bottom:0;left:0;width:100%;height:6px;cursor:ns-resize;background:rgba(255,255,255,0);transition:background .15s}
+.blk:hover .rs-right{background:rgba(255,255,255,0.25)}
+.blk:hover .rs-bottom{background:rgba(255,255,255,0.25)}
 
 #loading{flex:1;display:flex;align-items:center;justify-content:center;font-size:14px;color:#666;flex-direction:column;gap:12px}
 .spinner{width:28px;height:28px;border:3px solid #2e3150;border-top-color:#7c83f5;border-radius:50%;animation:spin .8s linear infinite}
@@ -312,7 +317,7 @@ function initApp(monday) {
         personMap[resp].subitems.push({
           subId:sub.id, boardId:sub.board?sub.board.id:null,
           cronColId:colIds['Cronograma']||null,
-          cronColType:colIds['Cronograma']?colTypeMap[colIds['Cronograma']]:null,
+          hsColId:colIds['HS']||null,
           jobName:sub.name||jobName, clientCode, tipo, status, hs, range
         });
       });
@@ -333,6 +338,20 @@ function initApp(monday) {
     } catch(err) {
       console.error('Erro datas:',err);
       showToast('Não consegui salvar a data. Ajuste direto no item.',true);
+    }
+  }
+
+  async function updateHS(sub, newHs) {
+    if(!sub.boardId||!sub.hsColId){ showToast('Coluna HS não encontrada.',true); return; }
+    try {
+      const query = `mutation ($boardId:ID!,$itemId:ID!,$columnId:String!,$value:String!){
+        change_simple_column_value(board_id:$boardId,item_id:$itemId,column_id:$columnId,value:$value){id}
+      }`;
+      await monday.api(query,{variables:{boardId:String(sub.boardId),itemId:String(sub.subId),columnId:sub.hsColId,value:String(newHs)}});
+      showToast(`HS atualizado para ${newHs}`);
+    } catch(err) {
+      console.error('Erro HS:',err);
+      showToast('Não consegui salvar o HS. Ajuste direto no item.',true);
     }
   }
 
@@ -466,9 +485,64 @@ function initApp(monday) {
           blk.className='blk'+(over?' over':'');
           blk.style.cssText=`left:${left}px;width:${width}px;top:${topOffset}px;height:${blkH}px;background:${cliColor(sub.clientCode)};`;
           const showSub=blkH>=28;
-          blk.innerHTML=`<div class="blk-job">${sub.jobName}</div>${showSub?`<div class="blk-tp">${sub.tipo} · HS ${sub.hs}</div>`:''}`;
+          blk.innerHTML=`<div class="blk-job">${sub.jobName}</div>`
+            + (showSub ? `<div class="blk-tp">${sub.tipo} · HS ${sub.hs}</div>` : '')
+            + (showSub && sub.status ? `<div class="blk-st">${sub.status}</div>` : '');
           topOffset += blkH + GAP;
-          blk.addEventListener('click',()=>{ monday.execute('openItemCard',{itemId:parseInt(sub.subId)}); });
+
+          // Handle direito — altera data fim
+          const rsR = document.createElement('div'); rsR.className='rs-right';
+          blk.appendChild(rsR);
+          rsR.addEventListener('mousedown', e => {
+            e.stopPropagation(); e.preventDefault();
+            const startX = e.clientX;
+            const origDays = Math.round((sub.range.end - sub.range.start) / 86400000);
+            function onMove(ev) {
+              const delta = Math.round((ev.clientX - startX) / DAY_W);
+              blk._pendingEnd = new Date(sub.range.start.getTime() + Math.max(0, origDays + delta) * 86400000);
+            }
+            function onUp() {
+              document.removeEventListener('mousemove', onMove);
+              document.removeEventListener('mouseup', onUp);
+              if(blk._pendingEnd) {
+                sub.range.end = blk._pendingEnd;
+                updateRange(sub, sub.range.start, blk._pendingEnd);
+                delete blk._pendingEnd;
+                render();
+              }
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+          });
+
+          // Handle inferior — altera HS
+          const rsB = document.createElement('div'); rsB.className='rs-bottom';
+          blk.appendChild(rsB);
+          rsB.addEventListener('mousedown', e => {
+            e.stopPropagation(); e.preventDefault();
+            const startY = e.clientY; const startHs = sub.hs;
+            function onMove(ev) {
+              const delta = Math.round((ev.clientY - startY) / PX_PER_HS);
+              blk._pendingHs = Math.max(1, startHs + delta);
+            }
+            function onUp() {
+              document.removeEventListener('mousemove', onMove);
+              document.removeEventListener('mouseup', onUp);
+              if(blk._pendingHs && blk._pendingHs !== sub.hs) {
+                sub.hs = blk._pendingHs;
+                updateHS(sub, sub.hs);
+                delete blk._pendingHs;
+                render();
+              }
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+          });
+
+          blk.addEventListener('click', e => {
+            if(e._dragged) return;
+            monday.execute('openItemCard', {itemId: parseInt(sub.subId)});
+          });
           pdays.appendChild(blk);
         });
       });
