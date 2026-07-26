@@ -436,6 +436,36 @@ function initApp(monday) {
   }
 
   let currentBoardId = null;
+  const undoStack = [];
+  const MAX_UNDO = 30;
+
+  function pushUndo(type, sub, prevVal) {
+    undoStack.push({ type, sub, prevVal });
+    if(undoStack.length > MAX_UNDO) undoStack.shift();
+  }
+
+  // Ctrl+Z — desfaz a última ação
+  document.addEventListener('keydown', async e => {
+    if(!(e.ctrlKey || e.metaKey) || e.key !== 'z') return;
+    e.preventDefault();
+    if(!undoStack.length) { showToast('Nada para desfazer.'); return; }
+    const action = undoStack.pop();
+    showToast('Desfazendo...');
+    try {
+      if(action.type === 'hs') {
+        action.sub.hs = action.prevVal;
+        await updateHS(action.sub, action.prevVal);
+      } else if(action.type === 'range') {
+        action.sub.range.start = action.prevVal.start;
+        action.sub.range.end   = action.prevVal.end;
+        await updateRange(action.sub, action.prevVal.start, action.prevVal.end);
+      }
+      render();
+      showToast('↩ Ação desfeita!');
+    } catch(err) {
+      showToast('Erro ao desfazer.', true);
+    }
+  });
 
   async function refreshData(silent = false) {
     if(!currentBoardId) return;
@@ -642,6 +672,7 @@ function initApp(monday) {
               document.removeEventListener('mousemove', onMove);
               document.removeEventListener('mouseup', onUp);
               if(blk._pendingEnd) {
+                pushUndo('range', sub, { start: new Date(sub.range.start), end: new Date(sub.range.end) });
                 sub.range.end = blk._pendingEnd;
                 updateRange(sub, sub.range.start, blk._pendingEnd);
                 delete blk._pendingEnd;
@@ -668,6 +699,7 @@ function initApp(monday) {
               document.removeEventListener('mousemove', onMove);
               document.removeEventListener('mouseup', onUp);
               if(blk._pendingStart) {
+                pushUndo('range', sub, { start: new Date(sub.range.start), end: new Date(sub.range.end) });
                 sub.range.start = blk._pendingStart;
                 updateRange(sub, blk._pendingStart, sub.range.end);
                 delete blk._pendingStart;
@@ -692,6 +724,7 @@ function initApp(monday) {
               document.removeEventListener('mousemove', onMove);
               document.removeEventListener('mouseup', onUp);
               if(blk._pendingHs && blk._pendingHs !== sub.hs) {
+                pushUndo('hs', sub, sub.hs);
                 sub.hs = blk._pendingHs;
                 updateHS(sub, sub.hs);
                 delete blk._pendingHs;
@@ -716,6 +749,7 @@ function initApp(monday) {
               document.removeEventListener('mousemove', onMove);
               document.removeEventListener('mouseup', onUp);
               if(blk._pendingHs && blk._pendingHs !== sub.hs) {
+                pushUndo('hs', sub, sub.hs);
                 sub.hs = blk._pendingHs;
                 updateHS(sub, sub.hs);
                 delete blk._pendingHs;
@@ -792,6 +826,7 @@ function initApp(monday) {
               blk.style.opacity = '1';
               if(moved && blk._pendingStart) {
                 ev._dragged = true;
+                pushUndo('range', sub, { start: new Date(origStart), end: new Date(origEnd) });
                 sub.range.start = blk._pendingStart;
                 sub.range.end   = blk._pendingEnd;
                 updateRange(sub, blk._pendingStart, blk._pendingEnd);
