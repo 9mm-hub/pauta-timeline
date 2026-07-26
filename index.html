@@ -27,7 +27,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .dh.wknd{background:#161616}
 .dh.holiday{background:#2d1414}
 .prow{display:flex;border-bottom:1px solid #333;min-height:80px}
-.pname{width:150px;flex-shrink:0;padding:8px 10px;font-size:12px;font-weight:500;color:#ddd;border-right:1px solid #333;display:flex;align-items:flex-start;gap:6px;cursor:grab;background:#1c1f2e}
+.pname{width:150px;flex-shrink:0;padding:8px 10px;font-size:12px;font-weight:500;color:#ddd;border-right:1px solid #333;display:flex;align-items:flex-start;gap:6px;cursor:grab;background:#000}
 .av{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:600;flex-shrink:0;color:#fff}
 .pname-text{font-size:11px;line-height:1.4;color:#ddd}
 .pdays{flex:1;position:relative;display:flex}
@@ -36,12 +36,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pdcell.today-col{background:rgba(124,131,245,0.07)}
 .pdcell.wknd-col{background:#161616}
 .pdcell.holiday-col{background:#2d1414}
-.blk{position:absolute;border-radius:5px;cursor:pointer;display:flex;flex-direction:column;justify-content:center;padding:4px 7px;transition:filter .1s;overflow:visible;z-index:2}
+.blk{position:absolute;border-radius:5px;cursor:pointer;display:flex;flex-direction:column;justify-content:center;padding:4px 7px;transition:filter .1s;overflow:hidden;z-index:2}
 .blk:hover{filter:brightness(1.15);z-index:5}
 .blk.over{outline:2px solid #e03131}
 .blk.dragging{z-index:20;filter:brightness(1.25)}
-.blk-job{font-weight:600;font-size:10px;line-height:1.3;color:#fff;white-space:nowrap;overflow:visible}
-.blk-tp{font-size:9px;color:rgba(255,255,255,0.75);margin-top:1px;white-space:nowrap}
+.blk-job{font-weight:600;font-size:10px;line-height:1.3;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.blk-tp{font-size:9px;color:rgba(255,255,255,0.75);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .blk-ow{font-size:9px;color:#fff;margin-top:2px;white-space:nowrap}
 .rs-handle{position:absolute;background:transparent}
 .rs-right{top:0;right:-3px;width:7px;height:100%;cursor:ew-resize}
@@ -135,6 +135,7 @@ function initApp(monday) {
 
   let holidays = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
   let weights = JSON.parse(localStorage.getItem('pesos_9mm') || 'null') || {...DEFAULT_WEIGHTS};
+  let defaultHs = parseInt(localStorage.getItem('default_hs_9mm') || '7');
 
   const cliColors = {}; let ci = 0;
   function cliColor(c) { if(!cliColors[c]){ cliColors[c] = PALETTE[ci % PALETTE.length]; ci++; } return cliColors[c]; }
@@ -224,7 +225,7 @@ function initApp(monday) {
         const tipo = cols['Tipo'] || '';
         const status = cols['Status'] || '';
         const hsRaw = parseInt(cols['HS'] || '0');
-        const hs = hsRaw > 0 ? hsRaw : (weights[tipo] || 4);
+        const hs = hsRaw > 0 ? hsRaw : defaultHs;
         if(!resp || !cronograma) return;
         const range = parseRange(cronograma);
         if(!range) return;
@@ -246,27 +247,30 @@ function initApp(monday) {
   async function updateHS(sub, newHs) {
     if (!sub.boardId || !sub.hsColId) { showToast('Não foi possível localizar a coluna HS.', true); return; }
     try {
-      const mutation = `mutation {
-        change_simple_column_value(board_id: ${sub.boardId}, item_id: ${sub.subId}, column_id: "${sub.hsColId}", value: "${newHs}") { id }
+      const query = `mutation ($boardId: ID!, $itemId: ID!, $columnId: String!, $value: String!) {
+        change_simple_column_value(board_id: $boardId, item_id: $itemId, column_id: $columnId, value: $value) { id }
       }`;
-      await monday.api(mutation);
+      await monday.api(query, { variables: { boardId: String(sub.boardId), itemId: String(sub.subId), columnId: sub.hsColId, value: String(newHs) } });
       showToast(`HS atualizado para ${newHs}`);
     } catch(err) {
-      showToast('Erro ao salvar HS: ' + err.message, true);
+      console.error('Erro HS:', err);
+      showToast('Não consegui salvar o HS automaticamente. Ajuste direto no item.', true);
     }
   }
 
   async function updateRange(sub, newStart, newEnd) {
     if (!sub.boardId || !sub.cronColId) { showToast('Não foi possível localizar a coluna Cronograma.', true); return; }
+    console.log('Tipo da coluna Cronograma:', sub.cronColType);
     try {
       const val = JSON.stringify({ from: fmtD(newStart), to: fmtD(newEnd) });
-      const mutation = `mutation {
-        change_column_value(board_id: ${sub.boardId}, item_id: ${sub.subId}, column_id: "${sub.cronColId}", value: ${JSON.stringify(val)}) { id }
+      const query = `mutation ($boardId: ID!, $itemId: ID!, $columnId: String!, $value: JSON!) {
+        change_column_value(board_id: $boardId, item_id: $itemId, column_id: $columnId, value: $value) { id }
       }`;
-      await monday.api(mutation);
+      await monday.api(query, { variables: { boardId: String(sub.boardId), itemId: String(sub.subId), columnId: sub.cronColId, value: val } });
       showToast('Datas atualizadas!');
     } catch(err) {
-      showToast('Erro ao salvar datas: ' + err.message, true);
+      console.error('Erro datas:', err);
+      showToast('Não consegui salvar a data automaticamente. Ajuste direto no item.', true);
     }
   }
 
@@ -474,16 +478,15 @@ function initApp(monday) {
   document.getElementById('btn-close-modal').addEventListener('click', () => { document.getElementById('modal-overlay').classList.remove('open'); });
   document.getElementById('bpesos').addEventListener('click', () => {
     const wr = document.getElementById('w-rows'); wr.innerHTML='';
-    Object.entries(weights).forEach(([tipo,val]) => {
-      const row = document.createElement('div'); row.className='w-row';
-      row.innerHTML = `<label>${tipo}</label><input type="number" data-tipo="${tipo}" value="${val}" min="1" max="20"/>`;
-      wr.appendChild(row);
-    });
+    const defRow = document.createElement('div'); defRow.className='w-row';
+    defRow.innerHTML = `<label>Padrão (sem HS preenchido)</label><input type="number" id="default-hs-input" value="${defaultHs}" min="1" max="20"/>`;
+    wr.appendChild(defRow);
     document.getElementById('weights-panel').classList.add('open');
   });
   document.getElementById('btn-save-w').addEventListener('click', () => {
-    document.querySelectorAll('#w-rows input').forEach(inp => { weights[inp.dataset.tipo] = parseInt(inp.value)||4; });
-    localStorage.setItem('pesos_9mm', JSON.stringify(weights));
+    const defInput = document.getElementById('default-hs-input');
+    if (defInput) defaultHs = parseInt(defInput.value) || 7;
+    localStorage.setItem('default_hs_9mm', String(defaultHs));
     document.getElementById('weights-panel').classList.remove('open');
     render();
   });
@@ -498,7 +501,7 @@ function initApp(monday) {
     const boardId = res.data.boardId;
     const currentUserId = res.data.user?.id;
     isAdmin = !ADMIN_USER_ID || String(currentUserId) === String(ADMIN_USER_ID);
-    if(isAdmin) document.querySelectorAll('.admin-only').forEach(el => el.style.display='');
+    if(isAdmin) document.querySelectorAll('.admin-only').forEach(el => el.style.display='inline-flex');
     console.log('User ID:', currentUserId);
 
     try {
