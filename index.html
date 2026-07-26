@@ -428,16 +428,21 @@ function initApp(monday) {
       });
       row.appendChild(pdays); rows.appendChild(row);
 
-      // Blocos
+      // Blocos — quebra em segmentos para não passar por fds/feriado
       const blocks=[];
       p.subitems.forEach(sub=>{
-        let colStart=-1, colEnd=-1;
+        let segStart=-1;
         days.forEach((d,i)=>{
           const ds=fmtD(d), ss=fmtD(sub.range.start), se=fmtD(sub.range.end);
-          if(ds>=ss&&ds<=se&&!isBlocked(d)){ if(colStart===-1) colStart=i; colEnd=i; }
+          const inRange = ds>=ss && ds<=se;
+          const working = !isBlocked(d);
+          if(inRange && working){
+            if(segStart===-1) segStart=i;
+          } else {
+            if(segStart!==-1){ blocks.push({sub,colStart:segStart,colEnd:i-1}); segStart=-1; }
+          }
         });
-        if(colStart===-1) return;
-        blocks.push({sub,colStart,colEnd});
+        if(segStart!==-1) blocks.push({sub,colStart:segStart,colEnd:days.length-1});
       });
 
       const parent=blocks.map((_,i)=>i);
