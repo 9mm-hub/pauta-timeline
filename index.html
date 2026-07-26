@@ -14,7 +14,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #wlbl{font-size:12px;color:#aaa;min-width:110px;text-align:center}
 #btn-today{background:#1a1a1a;border:1px solid #333;color:#ccc;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px}
 #btn-today:hover{background:#2a2a2a}
-#fperson{background:#1a1a1a;border:1px solid #333;color:#ddd;padding:4px 8px;border-radius:6px;font-size:12px}
+#fperson,#ftipo{background:#1a1a1a;border:1px solid #333;color:#ddd;padding:4px 8px;border-radius:6px;font-size:12px}
+#fsearch{background:#1a1a1a;border:1px solid #333;color:#ddd;padding:4px 8px;border-radius:6px;font-size:12px;width:140px}
+#fsearch::placeholder{color:#555}
 .admin-only{display:none}
 #bcfg,#bpesos{background:#1a1a1a;border:1px solid #333;color:#ccc;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px}
 #bcfg:hover,#bpesos:hover{background:#2a2a2a}
@@ -104,7 +106,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button id="btn-today">Hoje</button>
     <button class="nav" id="bn">&#8594;</button>
     <span id="wlbl">–</span>
-    <select id="fperson" class="admin-only"><option value="">Todos</option></select>
+    <input type="text" id="fsearch" placeholder="🔍 Pesquisar job..."/>
+    <select id="ftipo"><option value="">Todos os tipos</option></select>
+    <select id="fperson" class="admin-only"><option value="">Todas as pessoas</option></select>
     <button id="bcfg" class="admin-only">&#128197; Feriados</button>
     <button id="bpesos" class="admin-only">&#9881; Pesos</button>
   </div>
@@ -176,9 +180,26 @@ function initApp(monday) {
   const PAD = 4;
 
   let allData = [], personOrder = [], isAdmin = false;
-  let selPerson = '';
+  let selPerson = '', searchQuery = '', selTipo = '';
+  let allJobs = {}; // parentId → jobName — para busca por código base
   let holidays  = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
   let defaultHs = parseInt(localStorage.getItem('default_hs_9mm') || '7');
+
+  // Extrai o código base do job (COD_NUM_ANO sem a letra final)
+  // Aceita hífens ou underscores: ACC-0005-26F ou ACC_0005_26A → "ACC_0005_26"
+  function jobPrefix(name) {
+    const n = (name||'').replace(/[-_]/g, '_').toUpperCase();
+    const m = n.match(/^([A-Z]{2,5}_\d{2,6}_\d{2})/);
+    return m ? m[1] : null;
+  }
+
+  function relatedJobs(jobName) {
+    const pfx = jobPrefix(jobName);
+    if(!pfx) return [];
+    return Object.entries(allJobs)
+      .filter(([, name]) => jobPrefix(name) === pfx)
+      .map(([id, name]) => ({ id, name }));
+  }
 
   // ── Cores ─────────────────────────────────────────────────
   const cliColors = {}; let ci = 0;
@@ -405,8 +426,8 @@ function initApp(monday) {
         if(sum > globalMaxHs) globalMaxHs = sum;
       });
     });
-    // Altura da linha = soma máxima × px por unidade + espaços + padding
-    const ROW_H = PAD + globalMaxHs * PX_PER_HS + (Math.ceil(globalMaxHs/7)-1) * GAP + PAD;
+    // ROW_H: cada HS vale PX_PER_HS px. Os gaps são absorvidos internamente.
+    const ROW_H = PAD * 2 + globalMaxHs * PX_PER_HS;
 
     // Cabeçalho de dias agrupado por semana
     const dhi = document.getElementById('days-header-inner');
@@ -429,7 +450,20 @@ function initApp(monday) {
       wg.appendChild(lbl); wg.appendChild(wd); dhi.appendChild(wg);
     }
 
-    let data = selPerson ? allData.filter(p=>p.person===selPerson) : allData;
+    let data = allData;
+    // Filtro pessoa
+    if(selPerson) data = data.filter(p => p.person === selPerson);
+    // Filtro search + tipo (sem modificar allData)
+    if(searchQuery || selTipo) {
+      data = data.map(p => ({
+        ...p,
+        subitems: p.subitems.filter(sub => {
+          const okSearch = !searchQuery || sub.jobName.toLowerCase().includes(searchQuery.toLowerCase());
+          const okTipo   = !selTipo   || sub.tipo === selTipo;
+          return okSearch && okTipo;
+        })
+      })).filter(p => p.subitems.length > 0);
+    }
     data = [...data].sort((a,b)=>{
       const ia=personOrder.indexOf(a.person), ib=personOrder.indexOf(b.person);
       if(ia===-1&&ib===-1) return 0; if(ia===-1) return 1; if(ib===-1) return -1; return ia-ib;
@@ -506,14 +540,23 @@ function initApp(monday) {
       Object.values(clusters).forEach(cluster=>{
         const sum=cluster.reduce((acc,b)=>acc+b.sub.hs,0);
         const over=sum>7;
+        const N=cluster.length;
+        // Espaço total para os blocos = sum*PX_PER_HS, menos os gaps entre eles
+        // Assim HS 7 em 1 bloco ou 3 blocos ocupa exatamente a mesma altura visual
+        const totalPx = sum * PX_PER_HS - (N-1) * GAP;
         let topOffset=PAD;
         cluster.forEach(({sub,colStart,colEnd})=>{
-          const blkH = sub.hs * PX_PER_HS;          // tamanho fixo, nunca espreme
+          const blkH = Math.max(16, Math.round(totalPx * sub.hs / sum));
           const left  = colStart*DAY_W + 3;
           const width = (colEnd-colStart+1)*DAY_W - 6;
+          const isConcluido = /concluí/i.test(sub.status||'');
+          const isAndamento = /andamento/i.test(sub.status||'');
+          let extraStyle = '';
+          if(isConcluido) extraStyle += 'opacity:0.42;';
+          if(isAndamento) extraStyle += 'outline:2px solid rgba(255,255,255,0.75);outline-offset:-2px;';
           const blk=document.createElement('div');
           blk.className='blk'+(over?' over':'');
-          blk.style.cssText=`left:${left}px;width:${width}px;top:${topOffset}px;height:${blkH}px;background:${cliColor(sub.clientCode)};`;
+          blk.style.cssText=`left:${left}px;width:${width}px;top:${topOffset}px;height:${blkH}px;background:${cliColor(sub.clientCode)};${extraStyle}`;
           const showSub=blkH>=28;
           blk.innerHTML=`<div class="blk-job">${sub.jobName}</div>`
             + (showSub && sub.status ? `<div class="blk-tp">${sub.status} · HS ${sub.hs}</div>` : '');
@@ -644,7 +687,7 @@ function initApp(monday) {
             dd.appendChild(mkItem('📋', sub.jobName||'Abrir Job', ()=>monday.execute('openItemCard',{itemId:parseInt(sub.parentId)})));
             if(sub.siblings && sub.siblings.length){
               dd.appendChild(mkSep());
-              dd.appendChild(mkLabel('Subelemento'));
+            dd.appendChild(mkLabel('Subelemento'));
               sub.siblings.forEach(sib=>{
                 const isMe = sib.subId===sub.subId;
                 const itm = mkItem(isMe?'▶':'↳', sib.tipo||'Subitem', ()=>monday.execute('openItemCard',{itemId:parseInt(sib.subId)}));
@@ -652,8 +695,6 @@ function initApp(monday) {
                 dd.appendChild(itm);
               });
             }
-            dd.appendChild(mkSep());
-            dd.appendChild(mkItem('💬','Iniciar conversa',()=>monday.execute('openItemCard',{itemId:parseInt(sub.parentId)})));
             const ddW=180;
             let left=rect.right+4;
             if(left+ddW>window.innerWidth) left=rect.left-ddW-4;
@@ -707,8 +748,15 @@ function initApp(monday) {
 
   function populateFilter() {
     const sel=document.getElementById('fperson'); const cur=sel.value;
-    sel.innerHTML='<option value="">Todos</option>';
+    sel.innerHTML='<option value="">Todas as pessoas</option>';
     allData.forEach(p=>{ const o=document.createElement('option'); o.value=p.person; o.textContent=p.person; if(p.person===cur) o.selected=true; sel.appendChild(o); });
+  }
+
+  function populateTipo() {
+    const sel=document.getElementById('ftipo'); const cur=sel.value;
+    const tipos=[...new Set(allData.flatMap(p=>p.subitems.map(s=>s.tipo)).filter(Boolean))].sort();
+    sel.innerHTML='<option value="">Todos os tipos</option>';
+    tipos.forEach(t=>{ const o=document.createElement('option'); o.value=t; o.textContent=t; if(t===cur) o.selected=true; sel.appendChild(o); });
   }
 
   function renderHolidayList() {
@@ -751,6 +799,8 @@ function initApp(monday) {
   document.getElementById('bn').addEventListener('click', ()=>scrollByWeeks(1));
   document.getElementById('btn-today').addEventListener('click', scrollToToday);
   document.getElementById('fperson').addEventListener('change', e=>{ selPerson=e.target.value; render(); });
+  document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; render(); });
+  document.getElementById('fsearch').addEventListener('input', e=>{ searchQuery=e.target.value.trim(); render(); });
 
   document.getElementById('btn-add-h').addEventListener('click', ()=>{
     const val=document.getElementById('holiday-input').value;
@@ -786,6 +836,7 @@ function initApp(monday) {
       const items=await fetchData(boardId);
       allData=processItems(items);
       populateFilter();
+      populateTipo();
       document.getElementById('loading').style.display='none';
       document.getElementById('tl-outer').style.display='flex';
       render();
