@@ -544,9 +544,7 @@ function initApp(monday) {
         const ds = fmtD(d);
         const sum = p.subitems.reduce((acc,sub) => {
           const ss=fmtD(sub.range.start), se=fmtD(sub.range.end);
-          if(ds<ss||ds>se) return acc;
-          // Approximation: use hs (first day value) as upper bound
-          return acc + Math.max(sub.hs, sub.hs1??0, 8);
+          return ds>=ss && ds<=se ? acc + sub.hs : acc;
         }, 0);
         if(sum > globalMaxHs) globalMaxHs = sum;
       });
@@ -704,11 +702,13 @@ function initApp(monday) {
         const sum=cluster.reduce((acc,b)=>acc+bHs(b),0);
         const over=sum>8;
         const N=cluster.length;
-        const totalPx = sum * PX_PER_HS - (N-1) * GAP;
+        // Preenche proporcionalmente o espaço disponível da linha
+        // Mantém proporções entre blocos do mesmo cluster
+        const availH = ROW_H - PAD*2 - (N-1)*GAP;
         let topOffset=PAD;
         cluster.forEach(({sub,colStart,colEnd,dayHs})=>{
           const thisHs = dayHs ?? sub.hs;
-          const blkH = Math.max(16, Math.round(totalPx * thisHs / sum));
+          const blkH = Math.max(16, Math.round(availH * thisHs / sum));
           const left  = colStart*DAY_W + 3;
           const width = (colEnd-colStart+1)*DAY_W - 6;
           const isConcluido = /concluí/i.test(sub.status||'');
@@ -1091,7 +1091,7 @@ function initApp(monday) {
 
   // ── Init ──────────────────────────────────────────────────
   monday.listen('context', async res => {
-    const boardId = res.data.boardId;
+    const boardId = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
     currentBoardId = boardId;
     const currentUserId = res.data.user?.id;
     isAdmin = !ADMIN_USER_ID || String(currentUserId) === String(ADMIN_USER_ID);
