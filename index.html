@@ -1449,15 +1449,13 @@ function initApp(monday) {
       try {
         const raw = localStorage.getItem(dataCacheKey);
         if(raw) {
-          const {ts, data} = JSON.parse(raw);
+          const {ts, items} = JSON.parse(raw);
           if(Date.now() - ts < 5 * 60 * 1000) {
-            // Restaura datas (JSON serializa Date como string)
-            const restored = JSON.parse(data, (k,v) => (v&&v.__d__) ? new Date(v.__d__) : v);
-            allData = restored;
+            allData = processItems(items); // processItems cria Dates frescos
             hasCachedData = true;
           }
         }
-      } catch(e) {}
+      } catch(e) { console.warn('Cache inválido, ignorando:', e); }
 
       // ── Cache de fotos (1h) ───────────────────────────────────
       const photoCache = localStorage.getItem('users_photo_cache_9mm');
@@ -1543,11 +1541,10 @@ function initApp(monday) {
         render();
       }
 
-      // Guarda cache do board completo
+      // Guarda cache dos items brutos do board completo
       try {
-        const serialized = JSON.stringify(allData, (k,v) => v instanceof Date ? {__d__:v.toISOString()} : v);
-        localStorage.setItem(`board_cache_${boardFilterKey}`, JSON.stringify({ts:Date.now(), data:serialized}));
-      } catch(e) {}
+        localStorage.setItem(`board_cache_${boardFilterKey}`, JSON.stringify({ts:Date.now(), items:allItems}));
+      } catch(e) { console.warn('Erro ao guardar cache:', e); }
 
     } catch(err) {
       document.getElementById('loading').innerHTML=`<span style="color:#ef5350">Erro: ${err.message}</span>`;
