@@ -263,14 +263,19 @@ function initApp(monday) {
   let selTipo  = '';
   let selSetor = '';
   let sortMode = 'custom';
-  let boardFilterKey = '9mm'; // será substituído pelo boardId
+  // ceId na URL é único por vista (Board View tab) — ideal como chave
+  const _urlParams = new URLSearchParams(window.location.search);
+  const _ceId = _urlParams.get('ceId') || _urlParams.get('instanceId') || '';
+  let boardFilterKey = _ceId || '9mm';
 
-  // Captura o boardId imediatamente (antes do listen que pode demorar)
+  // Fallback: captura boardId do contexto se ceId não estiver disponível
   monday.get('context').then(res => {
-    const bid = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
-    const vid = res.data.viewId || res.data.appFeatureId || res.data.instanceId || res.data.boardViewId || '';
-    const key = vid ? String(vid) : (bid ? String(bid) : '9mm');
-    boardFilterKey = key;
+    if(!_ceId) {
+      const bid = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
+      const vid = res.data.viewId || res.data.appFeatureId || res.data.instanceId || '';
+      boardFilterKey = vid ? String(vid) : (bid ? String(bid) : '9mm');
+    }
+    console.log('boardFilterKey:', boardFilterKey);
   }).catch(() => {});
   let userPhotoMap = {};
   let userNameById = {};
