@@ -264,6 +264,12 @@ function initApp(monday) {
   let selSetor = '';
   let sortMode = 'custom';
   let boardFilterKey = '9mm'; // será substituído pelo boardId
+
+  // Captura o boardId imediatamente (antes do listen que pode demorar)
+  monday.get('context').then(res => {
+    const bid = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
+    if(bid) boardFilterKey = String(bid);
+  }).catch(() => {});
   let userPhotoMap = {};
   let userNameById = {};
   let holidays  = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
@@ -1383,6 +1389,28 @@ function initApp(monday) {
   document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; localStorage.setItem(`filter_tipo_${boardFilterKey}`, selTipo); render(); });
   document.getElementById('fsetor').addEventListener('change', e=>{ selSetor=e.target.value; localStorage.setItem(`filter_setor_${boardFilterKey}`, selSetor); render(); });
 
+  // Re-valida boardFilterKey sempre que o contexto muda (navegação entre painéis)
+  monday.listen('context', res => {
+    const bid = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
+    if(bid && String(bid) !== boardFilterKey) {
+      boardFilterKey = String(bid);
+      // Recarrega filtros para o novo painel
+      if(isAdmin) {
+        selPersons = JSON.parse(localStorage.getItem(`filter_persons_${boardFilterKey}`) || '[]');
+        selTipo    = localStorage.getItem(`filter_tipo_${boardFilterKey}`)   || '';
+        selSetor   = localStorage.getItem(`filter_setor_${boardFilterKey}`)  || '';
+        sortMode   = localStorage.getItem(`filter_sort_${boardFilterKey}`)   || 'custom';
+        document.getElementById('ftipo').value  = selTipo;
+        document.getElementById('fsetor').value = selSetor;
+        updatePersonBtn();
+        document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort===sortMode));
+      }
+      personOrder = JSON.parse(localStorage.getItem(`order_${boardFilterKey}`) || '[]');
+      subOrder    = JSON.parse(localStorage.getItem(`subOrder_${boardFilterKey}`) || '{}');
+      render();
+    }
+  });
+
   const fsearch = document.getElementById('fsearch');
   const fsearchClear = document.getElementById('fsearch-clear');
   fsearch.addEventListener('input', e=>{
@@ -1421,7 +1449,8 @@ function initApp(monday) {
   monday.listen('context', async res => {
     const boardId = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
     currentBoardId = boardId;
-    boardFilterKey = boardId || '9mm';
+    boardFilterKey = boardId ? String(boardId) : '9mm';
+    console.log('Board:', boardFilterKey, '| context:', JSON.stringify({boardId: res.data.boardId, boardIds: res.data.boardIds}));
 
     const currentUserName = res.data.user?.name || '';
     const currentUserId   = res.data.user?.id;
