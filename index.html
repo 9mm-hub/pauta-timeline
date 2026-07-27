@@ -80,7 +80,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pdcell.holiday-col{background:#1a0a0a}
 .blk{position:absolute;border-radius:5px;cursor:pointer;display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;padding:4px 6px 3px 6px;transition:filter .1s;overflow:hidden;z-index:2}
 .blk:hover{filter:brightness(1.15);z-index:5}
-.blk.over{outline:2px solid #e03131}
+.blk.over{} /* sobrecarregado sinalizado só pela faixa vermelha no dia */
 .blk-job{font-weight:600;font-size:10px;line-height:1.3;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
 .blk-tp{font-size:9px;color:rgba(255,255,255,0.75);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
 .blk-st{font-size:9px;color:rgba(255,255,255,0.6);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
@@ -663,10 +663,24 @@ function initApp(monday) {
     // ── Altura global uniforme ────────────────────────────────
     // Calcula o maior empilhamento de HS num mesmo dia (em qualquer pessoa)
     // para que TODAS as linhas tenham exatamente a mesma altura.
-    // ROW_H fixo em 8HS — linha sempre igual para todos
     const NORMAL_HS = 8;
     const NORMAL_H  = NORMAL_HS * PX_PER_HS;
-    const ROW_H = PAD*2 + NORMAL_H;
+
+    // ROW_H dinâmico: cresce conforme o máximo empilhado no dia
+    let globalMaxHs = NORMAL_HS;
+    const _visData = selPersons.length>0 ? allData.filter(p=>selPersons.includes(p.person)) : allData;
+    _visData.forEach(p=>{
+      days.forEach(d=>{
+        if(isBlocked(d)) return;
+        const ds=fmtD(d);
+        const sum=p.subitems.reduce((acc,sub)=>{
+          const ss=fmtD(sub.range.start),se=fmtD(sub.range.end);
+          return ds>=ss&&ds<=se ? acc+sub.hsFallback : acc;
+        },0);
+        if(sum>globalMaxHs) globalMaxHs=sum;
+      });
+    });
+    const ROW_H = PAD*2 + globalMaxHs*PX_PER_HS;
 
     // Cabeçalho de dias agrupado por semana
     const dhi = document.getElementById('days-header-inner');
@@ -824,14 +838,12 @@ function initApp(monday) {
         const bHs = b => b.dayHs ?? b.sub.hsFallback;
         const sum=cluster.reduce((acc,b)=>acc+bHs(b),0);
         const over=sum>NORMAL_HS;
-        // Se sobrecarregado: comprime proporcionalmente para caber nos 8HS
-        const scale = over ? (NORMAL_HS / sum) : 1;
 
-        // Agrupa por sub — dias consecutivos partilham topOffset (visualmente colados)
+        // Agrupa por sub — dias consecutivos partilham topOffset
         const subTopMap = {}, subMaxH = {};
         cluster.forEach(b => {
           const sid = b.sub.subId;
-          const h = Math.max(14, Math.round((b.dayHs??b.sub.hsFallback)*PX_PER_HS*scale));
+          const h = Math.max(14, Math.round((b.dayHs??b.sub.hsFallback)*PX_PER_HS));
           if(subMaxH[sid]===undefined) subMaxH[sid]=h;
           else subMaxH[sid]=Math.max(subMaxH[sid],h);
         });
@@ -840,13 +852,13 @@ function initApp(monday) {
         let tOff=PAD;
         seenSubs.forEach(sid=>{ subTopMap[sid]=tOff; tOff+=subMaxH[sid]+GAP; });
 
-        // Indicador vermelho na base do dia se sobrecarregado
+        // Faixa vermelha na base do dia se sobrecarregado
         if(over) {
           const uniqueCols=[...new Set(cluster.map(b=>b.colStart))];
           uniqueCols.forEach(col=>{
             const ind=document.createElement('div');
             ind.style.cssText=`position:absolute;left:${col*DAY_W+3}px;width:${DAY_W-6}px;bottom:2px;height:4px;background:#e03131;border-radius:2px;z-index:6;`;
-            ind.title=`${sum}HS neste dia (excede 8HS)`;
+            ind.title=`${sum}HS neste dia`;
             pdays.appendChild(ind);
           });
         }
@@ -854,7 +866,7 @@ function initApp(monday) {
         cluster.forEach(({sub,colStart,colEnd,dayHs,wpStart,wpEnd,noGapRight,noGapLeft})=>{
           const sid = sub.subId;
           const thisHs = dayHs ?? sub.hsFallback;
-          const blkH = Math.max(14, Math.round(thisHs * PX_PER_HS * scale));
+          const blkH = Math.max(14, Math.round(thisHs * PX_PER_HS));
           const topOffset = subTopMap[sid];
           const left  = colStart*DAY_W + 3;
           const width = noGapRight
@@ -1429,7 +1441,7 @@ function initApp(monday) {
   monday.listen('context', async res => {
     console.log('Full context:', JSON.stringify(res.data));
     const boardId = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
-    const viewId = res.data.viewId || res.data.appFeatureId || res.data.instanceId || res.data.boardViewId || '';
+    const viewId = res.data.instanceId || res.data.viewId || res.data.boardViewId || res.data.appFeatureId || '';
     currentBoardId = boardId;
     boardFilterKey = viewId ? String(viewId) : (boardId ? String(boardId) : '9mm');
     console.log('Board:', boardId, '| View:', viewId, '| Key:', boardFilterKey);
