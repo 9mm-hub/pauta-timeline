@@ -106,10 +106,18 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #loading{flex:1;display:flex;align-items:center;justify-content:center;font-size:14px;color:#666;flex-direction:column;gap:12px}
 .spinner{width:28px;height:28px;border:3px solid #2e3150;border-top-color:#7c83f5;border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
-#modal-overlay,#weights-panel{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center}
-#modal-overlay.open,#weights-panel.open{display:flex}
-#modal,#weights-box{background:#000;border:1px solid #333;border-radius:12px;padding:20px;min-width:300px}
-#modal h3,#weights-box h3{font-size:14px;font-weight:500;margin-bottom:14px;color:#fff}
+#modal-overlay,#weights-panel,#access-panel{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:200;align-items:center;justify-content:center}
+#modal-overlay.open,#weights-panel.open,#access-panel.open{display:flex}
+#modal,#weights-box,#access-box{background:#000;border:1px solid #333;border-radius:12px;padding:20px;min-width:300px}
+#modal h3,#weights-box h3,#access-box h3{font-size:14px;font-weight:500;margin-bottom:14px;color:#fff}
+/* Acesso */
+#access-list{display:flex;flex-direction:column;gap:4px;max-height:260px;overflow-y:auto;margin-bottom:12px}
+.access-item{display:flex;align-items:center;gap:10px;padding:6px 10px;border-radius:6px;background:#111;font-size:12px;color:#ddd}
+.access-item input[type=checkbox]{accent-color:#7c83f5;cursor:pointer;width:15px;height:15px}
+#btn-save-access{width:100%;padding:8px;background:#7c83f5;border:none;color:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
+#btn-close-access{width:100%;margin-top:8px;padding:8px;background:#1a1a1a;border:1px solid #333;color:#ccc;border-radius:6px;cursor:pointer;font-size:12px}
+/* Tooltip de feedback drag */
+#drag-tip{position:fixed;background:rgba(20,20,20,0.92);border:1px solid #555;color:#fff;padding:5px 10px;border-radius:6px;font-size:12px;font-weight:600;pointer-events:none;z-index:9999;display:none;white-space:nowrap}
 #holiday-list{margin-bottom:12px;display:flex;flex-direction:column;gap:6px;max-height:200px;overflow-y:auto}
 .h-item{display:flex;align-items:center;justify-content:space-between;font-size:12px;color:#ddd;background:#111;padding:6px 10px;border-radius:6px}
 .h-del{background:none;border:none;color:#ef5350;cursor:pointer;font-size:14px}
@@ -146,6 +154,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     </div>
     <button id="bcfg" class="admin-only">&#128197; Feriados</button>
     <button id="bpesos" class="admin-only">&#9881; Pesos</button>
+    <button id="baccess" class="main-admin-only" style="display:none">&#128275; Acesso</button>
   </div>
   <div id="loading"><div class="spinner"></div><span>Carregando...</span></div>
   <div id="tl-outer" style="display:none">
@@ -169,6 +178,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 
 <div id="toast"></div>
 <div id="blk-dd"></div>
+<div id="drag-tip"></div>
+
+<div id="access-panel">
+  <div id="access-box">
+    <h3>&#128275; Controlo de acesso</h3>
+    <p style="font-size:11px;color:#666;margin-bottom:10px">Pessoas com acesso alargado veem todos os filtros e todas as linhas.</p>
+    <div id="access-list"></div>
+    <button id="btn-save-access">Guardar</button>
+    <button id="btn-close-access">Cancelar</button>
+  </div>
+</div>
 
 <div id="modal-overlay">
   <div id="modal">
@@ -232,7 +252,8 @@ function initApp(monday) {
   const DAY_W = Math.max(70, Math.floor((window.innerWidth - NAME_W) / 7));
   const WEEK_PX = DAY_W * 7;
 
-  let allData = [], personOrder = [], isAdmin = false;
+  let allData = [], personOrder = [], isAdmin = false, isMainAdmin = false;
+  let subAdmins = []; // IDs com acesso alargado (carregado do Monday Storage)
   let selPersons = JSON.parse(localStorage.getItem('filter_persons_9mm') || '[]');
   let searchQuery = '';
   let selTipo  = localStorage.getItem('filter_tipo_9mm')  || '';
@@ -568,6 +589,58 @@ function initApp(monday) {
     refreshTimer = setTimeout(() => refreshData(true), 1500);
   });
 
+  async function loadSubAdmins() {
+    try {
+      const r = await monday.storage.getItem('sub_admins_9mm');
+      subAdmins = r.data?.value ? JSON.parse(r.data.value) : [];
+    } catch(e) { subAdmins = []; }
+  }
+
+  async function saveSubAdmins() {
+    try { await monday.storage.setItem('sub_admins_9mm', JSON.stringify(subAdmins)); }
+    catch(e) { showToast('Erro ao guardar acesso.', true); }
+  }
+
+  function openAccessPanel() {
+    const list = document.getElementById('access-list');
+    list.innerHTML = '';
+    // Lista todos os utilizadores do board
+    const names = [...new Set(allData.map(p=>p.person))].sort((a,b)=>a.localeCompare(b));
+    names.forEach(name => {
+      const uid = Object.keys(userNameById).find(id => userNameById[id] === name) || '';
+      const item = document.createElement('div'); item.className='access-item';
+      const ck = document.createElement('input'); ck.type='checkbox'; ck.dataset.uid=uid; ck.dataset.name=name;
+      ck.checked = uid && subAdmins.includes(uid);
+      item.appendChild(ck);
+      const lbl = document.createElement('span'); lbl.textContent = name;
+      item.appendChild(lbl);
+      list.appendChild(item);
+    });
+    document.getElementById('access-panel').classList.add('open');
+  }
+
+  document.getElementById('btn-save-access').addEventListener('click', async () => {
+    subAdmins = [...document.querySelectorAll('#access-list input:checked')]
+      .map(c => c.dataset.uid).filter(Boolean);
+    await saveSubAdmins();
+    document.getElementById('access-panel').classList.remove('open');
+    showToast('Acesso guardado!');
+  });
+  document.getElementById('btn-close-access').addEventListener('click', () => {
+    document.getElementById('access-panel').classList.remove('open');
+  });
+  document.getElementById('baccess').addEventListener('click', openAccessPanel);
+
+  // Tooltip de feedback drag
+  const dragTip = document.getElementById('drag-tip');
+  function showDragTip(text, x, y) {
+    dragTip.textContent = text;
+    dragTip.style.display = 'block';
+    dragTip.style.left = (x+14)+'px';
+    dragTip.style.top  = (y+14)+'px';
+  }
+  function hideDragTip() { dragTip.style.display = 'none'; }
+
   // ── Render ────────────────────────────────────────────────
   function render() {
     const days = getAllDays();
@@ -799,15 +872,18 @@ function initApp(monday) {
             e.stopPropagation(); e.preventDefault();
             const startX = e.clientX;
             const origDays = Math.round((sub.range.end - sub.range.start) / 86400000);
+            showDragTip(`→ ${sub.range.end.getDate()} ${MON_PT[sub.range.end.getMonth()]}`, e.clientX, e.clientY);
             function onMove(ev) {
               const delta = Math.round((ev.clientX - startX) / DAY_W);
               const pending = new Date(sub.range.start.getTime() + Math.max(0, origDays + delta) * 86400000);
               blk._pendingEnd = pending;
               blk.title = `→ ${pending.getDate()} ${MON_PT[pending.getMonth()]}`;
+              showDragTip(`→ ${pending.getDate()} ${MON_PT[pending.getMonth()]}`, ev.clientX, ev.clientY);
             }
             function onUp() {
               document.removeEventListener('mousemove', onMove);
               document.removeEventListener('mouseup', onUp);
+              hideDragTip();
               blk.title = sub.jobName;
               if(blk._pendingEnd) {
                 pushUndo('range', sub, { start: new Date(sub.range.start), end: new Date(sub.range.end) });
@@ -854,15 +930,18 @@ function initApp(monday) {
           rsB.addEventListener('mousedown', e => {
             e.stopPropagation(); e.preventDefault();
             const startY = e.clientY; const startHs = sub.hs;
+            showDragTip(`HS: ${startHs}`, e.clientX, e.clientY);
             function onMove(ev) {
               const delta = Math.round((ev.clientY - startY) / PX_PER_HS);
               const pending = Math.max(1, startHs + delta);
               blk._pendingHs = pending;
               blk.title = `HS: ${pending}`;
+              showDragTip(`HS: ${pending}`, ev.clientX, ev.clientY);
             }
             function onUp() {
               document.removeEventListener('mousemove', onMove);
               document.removeEventListener('mouseup', onUp);
+              hideDragTip();
               blk.title = sub.jobName;
               if(blk._pendingHs && blk._pendingHs !== sub.hs) {
                 pushUndo('hs', sub, sub.hs);
@@ -1123,15 +1202,17 @@ function initApp(monday) {
   wrap.addEventListener('scroll', ()=>{ updateWeekLabel(getAllDays()); });
 
   // ── Arrastar espaço vazio para pan ────────────────────────
-  let isPanning=false, panStartX=0, panScrollLeft=0;
+  let isPanning=false, panStartX=0, panStartY=0, panScrollLeft=0, panScrollTop=0;
   wrap.addEventListener('mousedown', e=>{
     if(e.target!==wrap && !e.target.classList.contains('pdcell') && !e.target.classList.contains('pdays')) return;
-    isPanning=true; panStartX=e.clientX; panScrollLeft=wrap.scrollLeft;
+    isPanning=true; panStartX=e.clientX; panStartY=e.clientY;
+    panScrollLeft=wrap.scrollLeft; panScrollTop=wrap.scrollTop;
     wrap.style.cursor='grabbing'; wrap.style.userSelect='none';
   });
   document.addEventListener('mousemove', e=>{
     if(!isPanning) return;
     wrap.scrollLeft = panScrollLeft - (e.clientX - panStartX);
+    wrap.scrollTop  = panScrollTop  - (e.clientY - panStartY);
   });
   document.addEventListener('mouseup', ()=>{
     if(isPanning){ isPanning=false; wrap.style.cursor=''; wrap.style.userSelect=''; }
@@ -1201,23 +1282,23 @@ function initApp(monday) {
     currentBoardId = boardId;
     const currentUserName = res.data.user?.name || '';
     const currentUserId   = res.data.user?.id;
-    // Admin = admin da conta Monday OU ID específico definido acima
-    isAdmin = res.data.user?.isAdmin === true ||
-              (ADMIN_USER_ID && String(currentUserId) === String(ADMIN_USER_ID));
-    console.log('User:', currentUserName, '| ID:', currentUserId, '| isAdmin:', isAdmin);
-    if(isAdmin) {
-      document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');
-    } else {
-      // Membro normal → filtra automaticamente para a sua própria linha
-      selPersons = currentUserName ? [currentUserName] : [];
-    }
+    isMainAdmin = res.data.user?.isAdmin === true ||
+                  (ADMIN_USER_ID && String(currentUserId) === String(ADMIN_USER_ID));
+
+    // Carrega sub-admins do Monday Storage antes de decidir acesso
+    await loadSubAdmins();
+    const isSubAdmin = subAdmins.includes(String(currentUserId));
+    isAdmin = isMainAdmin || isSubAdmin;
+
+    if(isAdmin) document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');
+    if(isMainAdmin) document.getElementById('baccess').style.display='inline-flex';
 
     try {
       const items = await fetchData(boardId);
       allData = processItems(items);
       await fetchUsers();
 
-      // Se nome veio vazio no contexto, resolve pelo ID (ex: conta de membro)
+      // Resolve nome e filtra se não for admin
       if(!isAdmin) {
         const resolvedName = currentUserName || userNameById[String(currentUserId)] || '';
         selPersons = resolvedName ? [resolvedName] : [];
