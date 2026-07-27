@@ -815,6 +815,12 @@ function initApp(monday) {
         if(segStart!==-1) blocks.push({sub,colStart:segStart,colEnd:workDays[workDays.length-1].dayIndex,dayHs:segHs,wpStart:segWpStart,wpEnd:workDays[workDays.length-1].workPos});
       });
 
+      // Post-processamento: marca noGapLeft nos blocos que seguem um noGapRight do mesmo sub
+      for(let k=1;k<blocks.length;k++){
+        if(blocks[k-1].noGapRight && blocks[k-1].sub.subId===blocks[k].sub.subId)
+          blocks[k].noGapLeft=true;
+      }
+
       const parent=blocks.map((_,i)=>i);
       function find(x){ while(parent[x]!==x) x=parent[x]; return x; }
       function union(a,b){ const ra=find(a),rb=find(b); if(ra!==rb) parent[ra]=rb; }
@@ -852,7 +858,7 @@ function initApp(monday) {
         seenSubs.forEach(sid => { subTopMap[sid] = tOff; tOff += subMaxH[sid] + GAP; });
 
         let runningHs=0;
-        cluster.forEach(({sub,colStart,colEnd,dayHs,wpStart,wpEnd,noGapRight})=>{
+        cluster.forEach(({sub,colStart,colEnd,dayHs,wpStart,wpEnd,noGapRight,noGapLeft})=>{
           const sid = sub.subId;
           const thisHs = dayHs ?? sub.hsFallback;
           const isOverflow = runningHs >= NORMAL_HS;
@@ -862,17 +868,16 @@ function initApp(monday) {
           // Remove margem direita se o próximo bloco é o mesmo sub (colados)
           const left  = colStart*DAY_W + 3;
           const width = noGapRight
-            ? (colEnd-colStart+1)*DAY_W - 3  // sem margem direita → cola com o próximo
+            ? (colEnd-colStart+1)*DAY_W - 3
             : (colEnd-colStart+1)*DAY_W - 6;
           const isConcluido = /concluí/i.test(sub.status||'');
           const isAndamento = /andamento|pausad/i.test(sub.status||'');
           let extraStyle = '';
           if(isConcluido) extraStyle += 'opacity:0.58;';
           if(isAndamento) extraStyle += 'outline:2px solid rgba(255,255,255,0.75);outline-offset:-2px;';
-          // Border-radius: sem canto direito se noGapRight, sem canto esquerdo se bloco anterior era o mesmo sub
-          const prevBlock = cluster[cluster.indexOf(cluster.find(b=>b.sub.subId===sid&&b.colEnd===colStart-1))];
-          const hasLeftNeighbor = prevBlock !== undefined;
-          const br = `${hasLeftNeighbor?0:5}px ${noGapRight?0:5}px ${noGapRight?0:5}px ${hasLeftNeighbor?0:5}px`;
+          const rL = noGapLeft  ? 0 : 5;
+          const rR = noGapRight ? 0 : 5;
+          const br = `${rL}px ${rR}px ${rR}px ${rL}px`;
           const blk=document.createElement('div');
           blk.className='blk'+(over?' over':'');
           blk.style.cssText=`left:${left}px;width:${width}px;top:${topOffset}px;height:${blkH}px;background:${cliColor(sub.clientCode)};border-radius:${br};${extraStyle}`;
