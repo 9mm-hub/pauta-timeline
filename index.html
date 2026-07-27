@@ -258,11 +258,12 @@ function initApp(monday) {
 
   let allData = [], personOrder = [], isAdmin = false, isMainAdmin = false;
   let subAdmins = []; // IDs com acesso alargado (carregado do Monday Storage)
-  let selPersons = JSON.parse(localStorage.getItem('filter_persons_9mm') || '[]');
+  let selPersons = [];
   let searchQuery = '';
-  let selTipo  = localStorage.getItem('filter_tipo_9mm')  || '';
-  let selSetor = localStorage.getItem('filter_setor_9mm') || '';
-  let sortMode = localStorage.getItem('filter_sort_9mm')  || 'custom';
+  let selTipo  = '';
+  let selSetor = '';
+  let sortMode = 'custom';
+  let boardFilterKey = '9mm'; // será substituído pelo boardId
   let userPhotoMap = {};
   let userNameById = {};
   let holidays  = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
@@ -1264,7 +1265,7 @@ function initApp(monday) {
         selPersons = [];
         dd.querySelectorAll('input[data-person]').forEach(c => c.checked=false);
       }
-      updatePersonBtn(); localStorage.setItem('filter_persons_9mm', JSON.stringify(selPersons)); render();
+      updatePersonBtn(); localStorage.setItem(`filter_persons_${boardFilterKey}`, JSON.stringify(selPersons)); render();
     });
     names.forEach(name => {
       const lbl = document.createElement('label');
@@ -1275,7 +1276,7 @@ function initApp(monday) {
         if(ck.checked) { if(!selPersons.includes(name)) selPersons.push(name); }
         else { selPersons = selPersons.filter(p=>p!==name); }
         allCk.checked = selPersons.length === 0;
-        updatePersonBtn(); localStorage.setItem('filter_persons_9mm', JSON.stringify(selPersons)); render();
+        updatePersonBtn(); localStorage.setItem(`filter_persons_${boardFilterKey}`, JSON.stringify(selPersons)); render();
       });
       dd.appendChild(lbl);
     });
@@ -1365,7 +1366,7 @@ function initApp(monday) {
     const btn = e.target.closest('.sort-btn');
     if(!btn) return;
     sortMode = btn.dataset.sort;
-    localStorage.setItem('filter_sort_9mm', sortMode);
+    localStorage.setItem(`filter_sort_${boardFilterKey}`, sortMode);
     document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b===btn));
     render();
   });
@@ -1375,8 +1376,8 @@ function initApp(monday) {
   const fpersonDd  = document.getElementById('fperson-dd');
   fpersonBtn.addEventListener('click', e => { e.stopPropagation(); fpersonDd.classList.toggle('open'); });
   document.addEventListener('click', e => { if(!fpersonDd.contains(e.target) && e.target!==fpersonBtn) fpersonDd.classList.remove('open'); });
-  document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; localStorage.setItem('filter_tipo_9mm', selTipo); render(); });
-  document.getElementById('fsetor').addEventListener('change', e=>{ selSetor=e.target.value; localStorage.setItem('filter_setor_9mm', selSetor); render(); });
+  document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; localStorage.setItem(`filter_tipo_${boardFilterKey}`, selTipo); render(); });
+  document.getElementById('fsetor').addEventListener('change', e=>{ selSetor=e.target.value; localStorage.setItem(`filter_setor_${boardFilterKey}`, selSetor); render(); });
 
   const fsearch = document.getElementById('fsearch');
   const fsearchClear = document.getElementById('fsearch-clear');
@@ -1418,6 +1419,15 @@ function initApp(monday) {
   monday.listen('context', async res => {
     const boardId = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
     currentBoardId = boardId;
+    boardFilterKey = boardId || '9mm';
+
+    // Carrega filtros específicos deste board
+    if(isAdmin) {
+      selPersons = JSON.parse(localStorage.getItem(`filter_persons_${boardFilterKey}`) || '[]');
+      selTipo    = localStorage.getItem(`filter_tipo_${boardFilterKey}`)   || '';
+      selSetor   = localStorage.getItem(`filter_setor_${boardFilterKey}`)  || '';
+      sortMode   = localStorage.getItem(`filter_sort_${boardFilterKey}`)   || 'custom';
+    }
     const currentUserName = res.data.user?.name || '';
     const currentUserId   = res.data.user?.id;
     isMainAdmin = res.data.user?.isAdmin === true ||
