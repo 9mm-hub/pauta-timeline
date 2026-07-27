@@ -666,33 +666,24 @@ function initApp(monday) {
     // ── Altura global uniforme ────────────────────────────────
     // Calcula o maior empilhamento de HS num mesmo dia (em qualquer pessoa)
     // para que TODAS as linhas tenham exatamente a mesma altura.
-    // ROW_H: zona normal (8HS) + espaço para blocos overflow compactos
+    // ROW_H: cada HS vale PX_PER_HS px — linha cresce conforme necessário
     const NORMAL_HS = 8;
     const NORMAL_H  = NORMAL_HS * PX_PER_HS;
-    const COMPACT_H = Math.round(PX_PER_HS * 0.85);
 
-    // Pré-calcula o maior número de blocos overflow em qualquer dia/pessoa
-    let maxOverflow = 0;
+    // Calcula o máximo de HS empilhado em qualquer dia/pessoa
+    let globalMaxHs = NORMAL_HS;
     (selPersons.length > 0 ? allData.filter(p=>selPersons.includes(p.person)) : allData).forEach(p => {
-      const ord = subOrder[p.person] || [];
-      const sSubs = [...p.subitems].sort((a,b)=>{
-        const ia=ord.indexOf(a.subId),ib=ord.indexOf(b.subId);
-        if(ia===-1&&ib===-1) return 0; if(ia===-1) return 1; if(ib===-1) return -1; return ia-ib;
-      });
       days.forEach(d => {
         if(isBlocked(d)) return;
         const ds=fmtD(d);
-        let runHs=0, ov=0;
-        sSubs.forEach(sub => {
-          const ss=fmtD(sub.range.start),se=fmtD(sub.range.end);
-          if(ds<ss||ds>se) return;
-          if(runHs>=NORMAL_HS) ov++;
-          runHs+=sub.hsFallback;
-        });
-        if(ov>maxOverflow) maxOverflow=ov;
+        const sum = p.subitems.reduce((acc,sub) => {
+          const ss=fmtD(sub.range.start), se=fmtD(sub.range.end);
+          return ds>=ss && ds<=se ? acc+sub.hsFallback : acc;
+        }, 0);
+        if(sum > globalMaxHs) globalMaxHs = sum;
       });
     });
-    const ROW_H = PAD*2 + NORMAL_H + (maxOverflow>0 ? maxOverflow*(COMPACT_H+GAP) : 0);
+    const ROW_H = PAD*2 + globalMaxHs * PX_PER_HS;
 
     // Cabeçalho de dias agrupado por semana
     const dhi = document.getElementById('days-header-inner');
@@ -877,11 +868,9 @@ function initApp(monday) {
         cluster.forEach(({sub,colStart,colEnd,dayHs,wpStart,wpEnd,noGapRight,noGapLeft})=>{
           const sid = sub.subId;
           const thisHs = dayHs ?? sub.hsFallback;
-          const isOverflow = runningHs >= NORMAL_HS;
-          const blkH = isOverflow ? COMPACT_H : Math.max(16, Math.round(thisHs * PX_PER_HS));
+          const blkH = Math.max(16, Math.round(thisHs * PX_PER_HS));
           runningHs += thisHs;
           const topOffset = subTopMap[sid];
-          // Remove margem direita se o próximo bloco é o mesmo sub (colados)
           const left  = colStart*DAY_W + 3;
           const width = noGapRight
             ? (colEnd-colStart+1)*DAY_W - 3
@@ -897,7 +886,6 @@ function initApp(monday) {
           const blk=document.createElement('div');
           blk.className='blk'+(over?' over':'');
           blk.style.cssText=`left:${left}px;width:${width}px;top:${topOffset}px;height:${blkH}px;background:${cliColor(sub.clientCode)};border-radius:${br};${extraStyle}`;
-          if(isOverflow) blk.style.opacity = (parseFloat(blk.style.opacity)||1) * 0.7 + '';
           blk.title = sub.jobName;
           const showSub = blkH >= 26;
           blk.innerHTML = `<div class="blk-job">${sub.jobName}</div>`
