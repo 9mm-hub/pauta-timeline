@@ -265,16 +265,13 @@ function initApp(monday) {
   let sortMode = 'custom';
   // ceId na URL é único por vista (Board View tab) — ideal como chave
   const _urlParams = new URLSearchParams(window.location.search);
-  const _ceId = _urlParams.get('ceId') || _urlParams.get('instanceId') || '';
+  const _ceId = _urlParams.get('ceId') || '';
   let boardFilterKey = _ceId || '9mm';
 
-  // Fallback: captura boardId do contexto se ceId não estiver disponível
   monday.get('context').then(res => {
-    if(!_ceId) {
-      const bid = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
-      const vid = res.data.viewId || res.data.appFeatureId || res.data.instanceId || '';
-      boardFilterKey = vid ? String(vid) : (bid ? String(bid) : '9mm');
-    }
+    const vid = res.data.instanceId || res.data.viewId || res.data.appFeatureId || '';
+    const bid = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
+    boardFilterKey = vid ? String(vid) : (_ceId || (bid ? String(bid) : '9mm'));
     console.log('boardFilterKey:', boardFilterKey);
   }).catch(() => {});
   let userPhotoMap = {};
@@ -666,24 +663,10 @@ function initApp(monday) {
     // ── Altura global uniforme ────────────────────────────────
     // Calcula o maior empilhamento de HS num mesmo dia (em qualquer pessoa)
     // para que TODAS as linhas tenham exatamente a mesma altura.
-    // ROW_H: cada HS vale PX_PER_HS px — linha cresce conforme necessário
+    // ROW_H fixo em 8HS — linha sempre igual para todos
     const NORMAL_HS = 8;
     const NORMAL_H  = NORMAL_HS * PX_PER_HS;
-
-    // Calcula o máximo de HS empilhado em qualquer dia/pessoa
-    let globalMaxHs = NORMAL_HS;
-    (selPersons.length > 0 ? allData.filter(p=>selPersons.includes(p.person)) : allData).forEach(p => {
-      days.forEach(d => {
-        if(isBlocked(d)) return;
-        const ds=fmtD(d);
-        const sum = p.subitems.reduce((acc,sub) => {
-          const ss=fmtD(sub.range.start), se=fmtD(sub.range.end);
-          return ds>=ss && ds<=se ? acc+sub.hsFallback : acc;
-        }, 0);
-        if(sum > globalMaxHs) globalMaxHs = sum;
-      });
-    });
-    const ROW_H = PAD*2 + globalMaxHs * PX_PER_HS;
+    const ROW_H = PAD*2 + NORMAL_H;
 
     // Cabeçalho de dias agrupado por semana
     const dhi = document.getElementById('days-header-inner');
@@ -841,35 +824,37 @@ function initApp(monday) {
         const bHs = b => b.dayHs ?? b.sub.hsFallback;
         const sum=cluster.reduce((acc,b)=>acc+bHs(b),0);
         const over=sum>NORMAL_HS;
-        const N=cluster.length;
-        // Blocos normais (soma ≤ 8): altura fixa por HS
-        // Blocos que ultrapassam 8HS: aparecem abaixo compactos (COMPACT_H cada)
-        // Agrupa blocos por sub para que dias consecutivos do mesmo job
-        // partilhem o mesmo topOffset (visualmente colados mesmo com HS diferentes)
-        const subTopMap = {}; // subId → topOffset
-        const subMaxH   = {}; // subId → altura máxima
+        // Se sobrecarregado: comprime proporcionalmente para caber nos 8HS
+        const scale = over ? (NORMAL_HS / sum) : 1;
+
+        // Agrupa por sub — dias consecutivos partilham topOffset (visualmente colados)
+        const subTopMap = {}, subMaxH = {};
         cluster.forEach(b => {
           const sid = b.sub.subId;
-          const h = Math.max(16, Math.round((b.dayHs??b.sub.hsFallback)*PX_PER_HS));
-          if(subMaxH[sid] === undefined) subMaxH[sid] = h;
-          else subMaxH[sid] = Math.max(subMaxH[sid], h);
+          const h = Math.max(14, Math.round((b.dayHs??b.sub.hsFallback)*PX_PER_HS*scale));
+          if(subMaxH[sid]===undefined) subMaxH[sid]=h;
+          else subMaxH[sid]=Math.max(subMaxH[sid],h);
         });
+        const seenSubs=[];
+        cluster.forEach(b=>{ if(!seenSubs.includes(b.sub.subId)) seenSubs.push(b.sub.subId); });
+        let tOff=PAD;
+        seenSubs.forEach(sid=>{ subTopMap[sid]=tOff; tOff+=subMaxH[sid]+GAP; });
 
-        // Atribui topOffset por sub respeitando a ordem original do cluster
-        const seenSubs = [];
-        cluster.forEach(b => {
-          const sid = b.sub.subId;
-          if(!seenSubs.includes(sid)) { seenSubs.push(sid); }
-        });
-        let tOff = PAD;
-        seenSubs.forEach(sid => { subTopMap[sid] = tOff; tOff += subMaxH[sid] + GAP; });
+        // Indicador vermelho na base do dia se sobrecarregado
+        if(over) {
+          const uniqueCols=[...new Set(cluster.map(b=>b.colStart))];
+          uniqueCols.forEach(col=>{
+            const ind=document.createElement('div');
+            ind.style.cssText=`position:absolute;left:${col*DAY_W+3}px;width:${DAY_W-6}px;bottom:2px;height:4px;background:#e03131;border-radius:2px;z-index:6;`;
+            ind.title=`${sum}HS neste dia (excede 8HS)`;
+            pdays.appendChild(ind);
+          });
+        }
 
-        let runningHs=0;
         cluster.forEach(({sub,colStart,colEnd,dayHs,wpStart,wpEnd,noGapRight,noGapLeft})=>{
           const sid = sub.subId;
           const thisHs = dayHs ?? sub.hsFallback;
-          const blkH = Math.max(16, Math.round(thisHs * PX_PER_HS));
-          runningHs += thisHs;
+          const blkH = Math.max(14, Math.round(thisHs * PX_PER_HS * scale));
           const topOffset = subTopMap[sid];
           const left  = colStart*DAY_W + 3;
           const width = noGapRight
