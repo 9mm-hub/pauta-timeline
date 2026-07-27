@@ -524,7 +524,7 @@ function initApp(monday) {
     } catch(e) { console.warn('Erro ao buscar users:', e); }
   }
 
-  let subOrder = JSON.parse(localStorage.getItem('subOrder_9mm') || '{}');
+  let subOrder = {}; // carregado por board no context listener
   // subOrder[person] = [subId, subId, ...] — ordem customizada dos subitems
   const undoStack = [];
   const MAX_UNDO = 30;
@@ -561,6 +561,7 @@ function initApp(monday) {
 
   async function refreshData(silent = false) {
     if(!currentBoardId) return;
+    if(!silent) localStorage.removeItem(`board_cache_${boardFilterKey}`); // força dados frescos
     const btn = document.getElementById('btn-refresh');
     if(btn) btn.classList.add('spinning');
     if(!silent) showToast('Atualizando dados...');
@@ -587,7 +588,8 @@ function initApp(monday) {
   // Atualiza automaticamente quando algo muda no board
   let refreshTimer = null;
   monday.listen('events', () => {
-    // Debounce: espera 1.5s após o último evento antes de atualizar
+    // Invalida o cache imediatamente quando há mudanças
+    if(boardFilterKey) localStorage.removeItem(`board_cache_${boardFilterKey}`);
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => refreshData(true), 1500);
   });
@@ -757,7 +759,7 @@ function initApp(monday) {
         const fi=personOrder.indexOf(from);
         if(fi>-1) personOrder.splice(fi,1);
         personOrder.splice(personOrder.indexOf(to),0,from);
-        localStorage.setItem('order_9mm',JSON.stringify(personOrder));
+        localStorage.setItem(`order_${boardFilterKey}`,JSON.stringify(personOrder));
         render();
       });
 
@@ -888,10 +890,11 @@ function initApp(monday) {
           blk.innerHTML = `<div class="blk-job">${sub.jobName}</div>`
             + (showSub && sub.status ? `<div class="blk-tp">${sub.status} · HS ${thisHs}</div>` : '');
 
-          // X por dia — posicionado em cada coluna do bloco
-          const totalDaysInSeg = colEnd - colStart + 1;
-          const nonZeroCount = (sub.hsd||[]).filter(v=>v>0).length || 1;
-          for(let di=0; di<totalDaysInSeg; di++){
+          // X por dia — apenas para admins
+          if(isAdmin) {
+            const totalDaysInSeg = colEnd - colStart + 1;
+            const nonZeroCount = (sub.hsd||[]).filter(v=>v>0).length || 1;
+            for(let di=0; di<totalDaysInSeg; di++){
             const wp = (wpStart??0) + di;
             const xBtn = document.createElement('button');
             xBtn.className = 'blk-day-x';
@@ -916,6 +919,7 @@ function initApp(monday) {
             });
             blk.appendChild(xBtn);
           }
+          } // fim if(isAdmin) X buttons
 
           // Handle direito — altera data fim
           const rsR = document.createElement('div'); rsR.className='rs-right';
@@ -1187,7 +1191,7 @@ function initApp(monday) {
                     arr.splice(fromIdx,1); arr.splice(toIdx,0,sub.subId);
                   }
                   subOrder[p.person]=arr;
-                  localStorage.setItem('subOrder_9mm',JSON.stringify(subOrder));
+                  localStorage.setItem(`subOrder_${boardFilterKey}`,JSON.stringify(subOrder));
                   render();
                 }
               } else if(mode==='move' && blk._pendingStart) {
@@ -1413,8 +1417,6 @@ function initApp(monday) {
   });
   document.getElementById('btn-close-w').addEventListener('click', ()=>{ document.getElementById('weights-panel').classList.remove('open'); });
 
-  personOrder=JSON.parse(localStorage.getItem('order_9mm')||'[]');
-
   // ── Init ──────────────────────────────────────────────────
   monday.listen('context', async res => {
     const boardId = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
@@ -1441,22 +1443,11 @@ function initApp(monday) {
       selSetor   = localStorage.getItem(`filter_setor_${boardFilterKey}`)  || '';
       sortMode   = localStorage.getItem(`filter_sort_${boardFilterKey}`)   || 'custom';
     }
+    // Ordem de pessoas e subitems — por board, por pessoa (localStorage individual)
+    personOrder = JSON.parse(localStorage.getItem(`order_${boardFilterKey}`) || '[]');
+    subOrder    = JSON.parse(localStorage.getItem(`subOrder_${boardFilterKey}`) || '{}');
 
     try {
-      // ── Cache de dados do board (5 min) ──────────────────────
-      const dataCacheKey = `board_cache_${boardFilterKey}`;
-      let hasCachedData = false;
-      try {
-        const raw = localStorage.getItem(dataCacheKey);
-        if(raw) {
-          const {ts, items} = JSON.parse(raw);
-          if(Date.now() - ts < 5 * 60 * 1000) {
-            allData = processItems(items); // processItems cria Dates frescos
-            hasCachedData = true;
-          }
-        }
-      } catch(e) { console.warn('Cache inválido, ignorando:', e); }
-
       // ── Cache de fotos (1h) ───────────────────────────────────
       const photoCache = localStorage.getItem('users_photo_cache_9mm');
       if(photoCache) {
@@ -1464,26 +1455,7 @@ function initApp(monday) {
         catch(e){}
       }
 
-      // Se há cache, mostra imediatamente e actualiza em background
-      if(hasCachedData) {
-        if(!isAdmin) {
-          const resolvedName = currentUserName || userNameById[String(currentUserId)] || '';
-          selPersons = resolvedName ? [resolvedName] : [];
-        }
-        populateFilter(); populateTipo(); populateSetor();
-        if(isAdmin) {
-          document.getElementById('ftipo').value = selTipo;
-          document.getElementById('fsetor').value = selSetor;
-          updatePersonBtn();
-          document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort===sortMode));
-        }
-        document.getElementById('loading').style.display='none';
-        document.getElementById('tl-outer').style.display='flex';
-        render();
-        requestAnimationFrame(()=>{ const days=getAllDays(); const idx=todayIndex(days); if(idx>=0) wrap.scrollLeft=scrollXForIndex(idx); updateWeekLabel(days); });
-      }
-
-      // Corre fetchUsers em paralelo com dados (sempre, para fotos actualizadas)
+      // Corre fetchUsers em paralelo com dados
       const firstPagePromise = (async () => {
         const query = `query { boards(ids:[${boardId}]) { items_page(limit:200) { cursor items { id name subitems { id name board{id columns{id title type}} column_values{id text value} } } } } }`;
         const r = await monday.api(query);
@@ -1493,7 +1465,6 @@ function initApp(monday) {
       const [firstPage] = await Promise.all([
         firstPagePromise,
         fetchUsers().then(() => {
-          // Guarda cache de fotos
           localStorage.setItem('users_photo_cache_9mm', JSON.stringify({ts:Date.now(), data:{photos:userPhotoMap,names:userNameById}}));
         }),
         loadSubAdmins()
@@ -1506,7 +1477,6 @@ function initApp(monday) {
         document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');
       }
 
-      // Renderiza com a primeira página (ou actualiza se já havia cache)
       let allItems = firstPage.items;
       allData = processItems(allItems);
 
@@ -1522,14 +1492,12 @@ function initApp(monday) {
         updatePersonBtn();
         document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort===sortMode));
       }
-      if(!hasCachedData) {
-        document.getElementById('loading').style.display='none';
-        document.getElementById('tl-outer').style.display='flex';
-        requestAnimationFrame(()=>{ const days=getAllDays(); const idx=todayIndex(days); if(idx>=0) wrap.scrollLeft=scrollXForIndex(idx); updateWeekLabel(days); });
-      }
+      document.getElementById('loading').style.display='none';
+      document.getElementById('tl-outer').style.display='flex';
       render();
+      requestAnimationFrame(()=>{ const days=getAllDays(); const idx=todayIndex(days); if(idx>=0) wrap.scrollLeft=scrollXForIndex(idx); updateWeekLabel(days); });
 
-      // Carrega páginas seguintes em background (silencioso)
+      // Carrega páginas seguintes em background
       let cursor = firstPage.cursor;
       while(cursor) {
         const r = await monday.api(`query { boards(ids:[${boardId}]) { items_page(limit:200,cursor:"${cursor}") { cursor items { id name subitems { id name board{id columns{id title type}} column_values{id text value} } } } } }`);
@@ -1540,11 +1508,6 @@ function initApp(monday) {
         populateFilter(); populateTipo(); populateSetor();
         render();
       }
-
-      // Guarda cache dos items brutos do board completo
-      try {
-        localStorage.setItem(`board_cache_${boardFilterKey}`, JSON.stringify({ts:Date.now(), items:allItems}));
-      } catch(e) { console.warn('Erro ao guardar cache:', e); }
 
     } catch(err) {
       document.getElementById('loading').innerHTML=`<span style="color:#ef5350">Erro: ${err.message}</span>`;
