@@ -93,6 +93,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 /* Menu três pontos */
 .blk-menu-btn{position:absolute;top:3px;right:4px;width:18px;height:14px;background:rgba(0,0,0,0.35);border:none;border-radius:3px;color:#fff;font-size:11px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:10;line-height:1;padding:0}
 .blk:hover .blk-menu-btn{display:flex}
+/* X por dia dentro do bloco */
+.blk-day-x{position:absolute;top:2px;width:14px;height:14px;background:rgba(0,0,0,0.4);border:none;border-radius:3px;color:#fff;font-size:9px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:11;padding:0;line-height:1}
+.blk:hover .blk-day-x{display:flex}
+.blk-day-x:hover{background:rgba(220,50,50,0.8)}
 .blk-ord{position:absolute;left:3px;width:16px;height:14px;background:rgba(0,0,0,0.35);border:none;border-radius:3px;color:#fff;font-size:9px;cursor:pointer;display:none;align-items:center;justify-content:center;z-index:10;padding:0}
 .blk-ord-up{top:3px}
 .blk-ord-dn{bottom:3px}
@@ -448,17 +452,13 @@ function initApp(monday) {
         const tipo = cols['Tipo']||'';
         const status = cols['Status']||'';
         const setor = cols['Setor']||'';
+        // HSD: "8 0 0 8 8" — um valor por dia útil, espaço como separador
+        const hsdText = (cols['HSD']||'').trim();
+        const hsd = hsdText ? hsdText.split(/\s+/).map(Number).filter(n=>!isNaN(n)) : null;
+        // Fallback: HS simples para jobs antigos sem HSD
         const hsText = (cols['HS']||'').trim();
         const hsRaw = parseInt(hsText);
-        const hs = (!hsText||isNaN(hsRaw)) ? defaultHs : hsRaw;
-
-        const hs0Text = (cols['HS0']||'').trim();
-        const hs0Raw = parseInt(hs0Text);
-        const hs0 = (!hs0Text||isNaN(hs0Raw)) ? null : hs0Raw; // null=vazio→8, 0=some, N→N
-
-        const hs1Text = (cols['HS1']||'').trim();
-        const hs1Raw = parseInt(hs1Text);
-        const hs1 = (!hs1Text||isNaN(hs1Raw)) ? null : hs1Raw;
+        const hsFallback = (!hsText||isNaN(hsRaw)) ? defaultHs : hsRaw;
         if(!resp||!cronograma) return;
         const range = parseRange(cronograma);
         if(!range) return;
@@ -468,10 +468,9 @@ function initApp(monday) {
           parentId: item.id,
           siblings: jobSubsMap[item.id] || [],
           cronColId:colIds['Cronograma']||null,
-          hsColId:colIds['HS']||null,
-          hs1ColId:colIds['HS1']||null,
-          hs0ColId:colIds['HS0']||null,
-          jobName:sub.name||jobName, clientCode, tipo, setor, status, hs, hs0, hs1, range
+          hsdColId:colIds['HSD']||null,
+          hsFallback, hsd,
+          jobName:sub.name||jobName, clientCode, tipo, setor, status, range
         });
       });
     });
@@ -495,17 +494,20 @@ function initApp(monday) {
     }
   }
 
-  async function updateHS(sub, newHs) {
-    if(!sub.boardId||!sub.hsColId){ showToast('Coluna HS não encontrada.',true); return; }
+  async function updateHSD(sub, newHsdArray) {
+    if(!sub.boardId||!sub.hsdColId){ showToast('Coluna HSD não encontrada.',true); return; }
     try {
-      const query = `mutation ($boardId:ID!,$itemId:ID!,$columnId:String!,$value:String!){
-        change_simple_column_value(board_id:$boardId,item_id:$itemId,column_id:$columnId,value:$value){id}
+      const val = newHsdArray.join(' ');
+      const query = `mutation {
+        change_simple_column_value(board_id: ${sub.boardId}, item_id: ${sub.subId}, column_id: "${sub.hsdColId}", value: ${JSON.stringify(val)}) { id }
       }`;
-      await monday.api(query,{variables:{boardId:String(sub.boardId),itemId:String(sub.subId),columnId:sub.hsColId,value:String(newHs)}});
-      showToast(`HS atualizado para ${newHs}`);
+      await monday.api(query);
+      sub.hsd = newHsdArray;
+      showToast('HSD actualizado!');
     } catch(err) {
-      console.error('Erro HS:',err);
-      showToast('Não consegui salvar o HS. Ajuste direto no item.',true);
+      const msg=(err?.message||'').slice(0,60);
+      console.error('Erro HSD:',err);
+      showToast('Erro: '+msg, true);
     }
   }
 
@@ -540,8 +542,8 @@ function initApp(monday) {
     showToast('Desfazendo...');
     try {
       if(action.type === 'hs') {
-        action.sub.hs = action.prevVal;
-        await updateHS(action.sub, action.prevVal);
+        action.sub.hsd = action.prevVal;
+        await updateHSD(action.sub, action.prevVal);
       } else if(action.type === 'range') {
         action.sub.range.start = action.prevVal.start;
         action.sub.range.end   = action.prevVal.end;
@@ -669,7 +671,7 @@ function initApp(monday) {
           const ss=fmtD(sub.range.start),se=fmtD(sub.range.end);
           if(ds<ss||ds>se) return;
           if(runHs>=NORMAL_HS) ov++;
-          runHs+=sub.hs;
+          runHs+=sub.hsFallback;
         });
         if(ov>maxOverflow) maxOverflow=ov;
       });
@@ -776,52 +778,38 @@ function initApp(monday) {
         if(ia===-1&&ib===-1) return 0; if(ia===-1) return 1; if(ib===-1) return -1; return ia-ib;
       });
 
-      // Blocos com lógica HS/HS1:
-      // HS = primeiro dia útil · HS1 = último dia útil · meio = 8
+      // Blocos com HSD: array de horas por dia útil
       const blocks=[];
       sortedSubs.forEach(sub=>{
-        // Coleta todos os dias úteis no range para esta sub
         const workDays=[];
         days.forEach((d,i)=>{
           const ds=fmtD(d),ss=fmtD(sub.range.start),se=fmtD(sub.range.end);
-          if(ds>=ss&&ds<=se&&!isBlocked(d)) workDays.push(i);
+          if(ds>=ss&&ds<=se&&!isBlocked(d)) workDays.push({dayIndex:i,workPos:workDays.length});
         });
         if(workDays.length===0) return;
 
-        const firstIdx=workDays[0], lastIdx=workDays[workDays.length-1];
-
-        // Lógica por número de dias:
-        // 1 dia  → HS
-        // 2 dias → primeiro=HS, último=HS1
-        // 3+ dias → primeiro=HS, meio=HS0(null→8, 0→some), último=HS1
-        const dayHsOf = i => {
-          if(workDays.length === 1) return sub.hs;
-          if(i === firstIdx) return sub.hs;
-          if(i === lastIdx)  return sub.hs1 ?? defaultHs;
-          // dias do meio (só existe se workDays.length > 2)
-          if(sub.hs0 === null) return 8;   // HS0 vazio → 8
-          if(sub.hs0 === 0)    return 0;   // HS0 = 0 → some
-          return sub.hs0;                   // HS0 > 0 → usa valor
+        const hsAt = wp => {
+          if(!sub.hsd||sub.hsd.length===0) return sub.hsFallback;
+          return sub.hsd[Math.min(wp, sub.hsd.length-1)];
         };
 
-        // Agrupa dias consecutivos com mesmo dayHs em segmentos, pula dias com hs=0
-        let segStart=-1, segHs=null;
-        workDays.forEach((idx,k)=>{
-          const curHs=dayHsOf(idx);
-          const consecutive=k>0&&workDays[k-1]===idx-1;
+        let segStart=-1, segHs=null, segWpStart=-1;
+        workDays.forEach(({dayIndex,workPos},k)=>{
+          const curHs=hsAt(workPos);
+          const consecutive=k>0&&workDays[k-1].dayIndex===dayIndex-1;
           if(curHs===0){
-            // HS=0 → não mostra bloco nesse dia, fecha segmento atual
-            if(segStart!==-1){ blocks.push({sub,colStart:segStart,colEnd:workDays[k-1],dayHs:segHs}); segStart=-1; segHs=null; }
+            if(segStart!==-1){ blocks.push({sub,colStart:segStart,colEnd:workDays[k-1].dayIndex,dayHs:segHs,wpStart:segWpStart,wpEnd:workPos-1}); segStart=-1; segHs=null; segWpStart=-1; }
             return;
           }
-          if(segStart===-1){
-            segStart=idx; segHs=curHs;
-          } else if(curHs!==segHs||!consecutive){
-            blocks.push({sub,colStart:segStart,colEnd:workDays[k-1],dayHs:segHs});
-            segStart=idx; segHs=curHs;
+          if(segStart===-1){ segStart=dayIndex; segHs=curHs; segWpStart=workPos; }
+          else if(!consecutive){ 
+            // Só parte no fim de semana/feriado, não na mudança de HS
+            blocks.push({sub,colStart:segStart,colEnd:workDays[k-1].dayIndex,dayHs:segHs,wpStart:segWpStart,wpEnd:workPos-1}); 
+            segStart=dayIndex; segHs=curHs; segWpStart=workPos; 
           }
+          // Se consecutivo mas HS diferente: continua o mesmo segmento (visualmente colado)
         });
-        if(segStart!==-1) blocks.push({sub,colStart:segStart,colEnd:workDays[workDays.length-1],dayHs:segHs});
+        if(segStart!==-1) blocks.push({sub,colStart:segStart,colEnd:workDays[workDays.length-1].dayIndex,dayHs:segHs,wpStart:segWpStart,wpEnd:workDays[workDays.length-1].workPos});
       });
 
       const parent=blocks.map((_,i)=>i);
@@ -834,15 +822,15 @@ function initApp(monday) {
       blocks.forEach((b,i)=>{ const r=find(i); (clusters[r]=clusters[r]||[]).push(b); });
 
       Object.values(clusters).forEach(cluster=>{
-        const bHs = b => b.dayHs ?? b.sub.hs;
+        const bHs = b => b.dayHs ?? b.sub.hsFallback;
         const sum=cluster.reduce((acc,b)=>acc+bHs(b),0);
         const over=sum>NORMAL_HS;
         const N=cluster.length;
         // Blocos normais (soma ≤ 8): altura fixa por HS
         // Blocos que ultrapassam 8HS: aparecem abaixo compactos (COMPACT_H cada)
         let runningHs=0, topOffset=PAD;
-        cluster.forEach(({sub,colStart,colEnd,dayHs})=>{
-          const thisHs = dayHs ?? sub.hs;
+        cluster.forEach(({sub,colStart,colEnd,dayHs,wpStart,wpEnd})=>{
+          const thisHs = dayHs ?? sub.hsFallback;
           const isOverflow = runningHs >= NORMAL_HS;
           const blkH = isOverflow
             ? COMPACT_H
@@ -863,6 +851,35 @@ function initApp(monday) {
           const showSub = blkH >= 26;
           blk.innerHTML = `<div class="blk-job">${sub.jobName}</div>`
             + (showSub && sub.status ? `<div class="blk-tp">${sub.status} · HS ${thisHs}</div>` : '');
+
+          // X por dia — posicionado em cada coluna do bloco
+          const totalDaysInSeg = colEnd - colStart + 1;
+          const nonZeroCount = (sub.hsd||[]).filter(v=>v>0).length || 1;
+          for(let di=0; di<totalDaysInSeg; di++){
+            const wp = (wpStart??0) + di;
+            const xBtn = document.createElement('button');
+            xBtn.className = 'blk-day-x';
+            xBtn.textContent = '×';
+            xBtn.style.left = (di * DAY_W + DAY_W/2 - 7) + 'px';
+            xBtn.title = `Zerar dia ${di+1}`;
+            // Não mostra X se for o último dia não-zero
+            if(nonZeroCount <= 1) xBtn.style.display='none';
+            xBtn.addEventListener('click', e => {
+              e.stopPropagation();
+              const currentHsd = sub.hsd ? [...sub.hsd] : Array(wp+1).fill(thisHs);
+              // Garante que o array tem posições suficientes
+              while(currentHsd.length <= wp) currentHsd.push(currentHsd[currentHsd.length-1] ?? thisHs);
+              const newHsd = [...currentHsd];
+              newHsd[wp] = 0;
+              // Não permite ficar tudo a zero
+              if(newHsd.filter(v=>v>0).length === 0) { showToast('Não podes apagar o último dia.', true); return; }
+              pushUndo('hs', sub, [...currentHsd]);
+              sub.hsd = newHsd;
+              updateHSD(sub, newHsd);
+              render();
+            });
+            blk.appendChild(xBtn);
+          }
           topOffset += blkH + GAP;
 
           // Handle direito — altera data fim
@@ -929,7 +946,7 @@ function initApp(monday) {
           blk.appendChild(rsB);
           rsB.addEventListener('mousedown', e => {
             e.stopPropagation(); e.preventDefault();
-            const startY = e.clientY; const startHs = sub.hs;
+            const startY = e.clientY; const startHs = dayHs ?? sub.hsFallback;
             showDragTip(`HS: ${startHs}`, e.clientX, e.clientY);
             function onMove(ev) {
               const delta = Math.round((ev.clientY - startY) / PX_PER_HS);
@@ -943,10 +960,11 @@ function initApp(monday) {
               document.removeEventListener('mouseup', onUp);
               hideDragTip();
               blk.title = sub.jobName;
-              if(blk._pendingHs && blk._pendingHs !== sub.hs) {
-                pushUndo('hs', sub, sub.hs);
-                sub.hs = blk._pendingHs;
-                updateHS(sub, sub.hs);
+              if(blk._pendingHs && blk._pendingHs !== startHs) {
+                const newHsd = (sub.hsd||[sub.hsFallback]).map(v => v===startHs ? blk._pendingHs : v);
+                pushUndo('hs', sub, sub.hsd ? [...sub.hsd] : [sub.hsFallback]);
+                sub.hsd = newHsd;
+                updateHSD(sub, newHsd);
                 delete blk._pendingHs;
                 render();
               }
@@ -960,21 +978,24 @@ function initApp(monday) {
           blk.appendChild(rsT);
           rsT.addEventListener('mousedown', e => {
             e.stopPropagation(); e.preventDefault();
-            const startY = e.clientY; const startHs = sub.hs;
+            const startY = e.clientY; const startHs = dayHs ?? sub.hsFallback;
+            showDragTip(`HS: ${startHs}`, e.clientX, e.clientY);
             function onMove(ev) {
               const delta = Math.round((ev.clientY - startY) / PX_PER_HS);
               const pending = Math.max(1, startHs - delta);
               blk._pendingHs = pending;
               blk.title = `HS: ${pending}`;
+              showDragTip(`HS: ${pending}`, ev.clientX, ev.clientY);
             }
             function onUp() {
               document.removeEventListener('mousemove', onMove);
               document.removeEventListener('mouseup', onUp);
-              blk.title = sub.jobName;
-              if(blk._pendingHs && blk._pendingHs !== sub.hs) {
-                pushUndo('hs', sub, sub.hs);
-                sub.hs = blk._pendingHs;
-                updateHS(sub, sub.hs);
+              hideDragTip(); blk.title = sub.jobName;
+              if(blk._pendingHs && blk._pendingHs !== startHs) {
+                const newHsd = (sub.hsd||[sub.hsFallback]).map(v => v===startHs ? blk._pendingHs : v);
+                pushUndo('hs', sub, sub.hsd ? [...sub.hsd] : [sub.hsFallback]);
+                sub.hsd = newHsd;
+                updateHSD(sub, newHsd);
                 delete blk._pendingHs;
                 render();
               }
@@ -988,7 +1009,90 @@ function initApp(monday) {
             monday.execute('openItemCard', {itemId: parseInt(sub.subId)});
           });
 
-          // ── Arrastar para reordenar (substituí ▲▼) ───────────
+          // Shift+arrastar — cria novo segmento e actualiza HSD + Cronograma
+          blk.addEventListener('mousedown', e => {
+            if(!e.shiftKey) return;
+            if(e.target.classList.contains('rs-right')||e.target.classList.contains('rs-left')||
+               e.target.classList.contains('rs-bottom')||e.target.classList.contains('rs-top')||
+               e.target.classList.contains('blk-menu-btn')) return;
+            e.stopPropagation(); e.preventDefault();
+            const startX = e.clientX;
+            let dragColStart = colStart, dragColEnd = colEnd;
+            const ghost = document.createElement('div');
+            ghost.style.cssText = `position:fixed;opacity:0.55;pointer-events:none;z-index:9999;
+              background:${cliColor(sub.clientCode)};border-radius:5px;padding:3px 7px;
+              font-size:10px;color:#fff;font-weight:600;white-space:nowrap`;
+            ghost.textContent = '+ ' + sub.jobName;
+            document.body.appendChild(ghost);
+
+            function onMove(ev) {
+              const delta = Math.round((ev.clientX - startX) / DAY_W);
+              dragColStart = colStart + delta;
+              dragColEnd   = colEnd   + delta;
+              ghost.style.left = (ev.clientX + 10) + 'px';
+              ghost.style.top  = (ev.clientY + 10) + 'px';
+              const dS = days[Math.max(0, dragColStart)];
+              const dE = days[Math.min(TOTAL_DAYS-1, dragColEnd)];
+              if(dS && dE) ghost.textContent = `+ ${dS.getDate()}/${dS.getMonth()+1} → ${dE.getDate()}/${dE.getMonth()+1}`;
+            }
+            function onUp() {
+              document.removeEventListener('mousemove', onMove);
+              document.removeEventListener('mouseup', onUp);
+              ghost.remove();
+              if(dragColStart === colStart) return; // não moveu
+
+              const newSegStart = days[Math.max(0, dragColStart)];
+              const newSegEnd   = days[Math.min(TOTAL_DAYS-1, dragColEnd)];
+              if(!newSegStart || !newSegEnd) return;
+
+              // Nova range total: min→max
+              const extStart = new Date(Math.min(sub.range.start, newSegStart));
+              const extEnd   = new Date(Math.max(sub.range.end,   newSegEnd));
+
+              // Calcula todos os dias úteis na range extendida
+              const extWorkDays = [];
+              const allDays = getAllDays();
+              allDays.forEach(d => {
+                if(d >= extStart && d <= extEnd && !isBlocked(d)) extWorkDays.push(d);
+              });
+
+              // Para cada dia útil, calcula o HSD
+              const origWork = [];
+              allDays.forEach(d => {
+                if(d >= sub.range.start && d <= sub.range.end && !isBlocked(d)) origWork.push(fmtD(d));
+              });
+              const newSegWork = [];
+              allDays.forEach(d => {
+                if(d >= newSegStart && d <= newSegEnd && !isBlocked(d)) newSegWork.push(fmtD(d));
+              });
+
+              const lastOrigHs = sub.hsd ? (sub.hsd[sub.hsd.length-1] ?? sub.hsFallback) : sub.hsFallback;
+
+              const newHsd = extWorkDays.map(d => {
+                const ds = fmtD(d);
+                const origPos = origWork.indexOf(ds);
+                if(origPos !== -1) {
+                  // Dia original → usa valor HSD original
+                  if(!sub.hsd||sub.hsd.length===0) return sub.hsFallback;
+                  return sub.hsd[Math.min(origPos, sub.hsd.length-1)];
+                }
+                if(newSegWork.includes(ds)) return lastOrigHs; // novo segmento
+                return 0; // gap
+              });
+
+              sub.range.start = extStart;
+              sub.range.end   = extEnd;
+              sub.hsd = newHsd;
+
+              updateRange(sub, extStart, extEnd);
+              updateHSD(sub, newHsd);
+              render();
+            }
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
+          });
+
+          // Arrastar normal (sem Shift)
           // Arrastar verticalmente muda a ordem da pessoa
           blk.addEventListener('mousedown', e => {
             if(e.target.classList.contains('rs-right')||e.target.classList.contains('rs-left')||
