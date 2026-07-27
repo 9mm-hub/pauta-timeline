@@ -825,430 +825,123 @@ function initApp(monday) {
           blocks[k].noGapLeft=true;
       }
 
-      const parent=blocks.map((_,i)=>i);
-      function find(x){ while(parent[x]!==x) x=parent[x]; return x; }
-      function union(a,b){ const ra=find(a),rb=find(b); if(ra!==rb) parent[ra]=rb; }
-      for(let i=0;i<blocks.length;i++)
-        for(let j=i+1;j<blocks.length;j++)
-          if(!(blocks[j].colEnd<blocks[i].colStart||blocks[j].colStart>blocks[i].colEnd)) union(i,j);
-      const clusters={};
-      blocks.forEach((b,i)=>{ const r=find(i); (clusters[r]=clusters[r]||[]).push(b); });
+      // ── Rendering por dia independente ──────────────────────
+      // Cada dia empilha os seus próprios blocos do topo independentemente
 
-      Object.values(clusters).forEach(cluster=>{
-        const bHs = b => b.dayHs ?? b.sub.hsFallback;
-        const sum=cluster.reduce((acc,b)=>acc+bHs(b),0);
-        const over=sum>NORMAL_HS;
-
-        // Agrupa por sub — dias consecutivos partilham topOffset
-        const subTopMap = {}, subMaxH = {};
-        cluster.forEach(b => {
-          const sid = b.sub.subId;
-          const h = Math.max(14, Math.round((b.dayHs??b.sub.hsFallback)*PX_PER_HS));
-          if(subMaxH[sid]===undefined) subMaxH[sid]=h;
-          else subMaxH[sid]=Math.max(subMaxH[sid],h);
-        });
-        const seenSubs=[];
-        cluster.forEach(b=>{ if(!seenSubs.includes(b.sub.subId)) seenSubs.push(b.sub.subId); });
-        let tOff=PAD;
-        seenSubs.forEach(sid=>{ subTopMap[sid]=tOff; tOff+=subMaxH[sid]+GAP; });
-
-        // Faixa vermelha na base do dia se sobrecarregado
-        if(over) {
-          const uniqueCols=[...new Set(cluster.map(b=>b.colStart))];
-          uniqueCols.forEach(col=>{
-            const ind=document.createElement('div');
-            ind.style.cssText=`position:absolute;left:${col*DAY_W+3}px;width:${DAY_W-6}px;bottom:2px;height:4px;background:#e03131;border-radius:2px;z-index:6;`;
-            ind.title=`${sum}HS neste dia`;
-            pdays.appendChild(ind);
-          });
+      // Índice dia → blocos (sem duplicar o mesmo sub no mesmo dia)
+      const dayMap = {};
+      blocks.forEach(b => {
+        for(let di=b.colStart; di<=b.colEnd; di++){
+          if(!dayMap[di]) dayMap[di]=[];
+          if(!dayMap[di].find(x=>x.sub.subId===b.sub.subId)) dayMap[di].push({...b, di});
         }
+      });
 
-        cluster.forEach(({sub,colStart,colEnd,dayHs,wpStart,wpEnd,noGapRight,noGapLeft})=>{
-          const sid = sub.subId;
-          const thisHs = dayHs ?? sub.hsFallback;
-          const blkH = Math.max(14, Math.round(thisHs * PX_PER_HS));
-          const topOffset = subTopMap[sid];
-          const left  = colStart*DAY_W + 3;
-          const width = noGapRight
-            ? (colEnd-colStart+1)*DAY_W - 3
-            : (colEnd-colStart+1)*DAY_W - 6;
-          const isConcluido = /concluí/i.test(sub.status||'');
-          const isAndamento = /andamento|pausad/i.test(sub.status||'');
-          let extraStyle = '';
-          if(isConcluido) extraStyle += 'opacity:0.58;';
-          if(isAndamento) extraStyle += 'outline:2px solid rgba(255,255,255,0.75);outline-offset:-2px;';
-          const rL = noGapLeft  ? 0 : 5;
-          const rR = noGapRight ? 0 : 5;
-          const br = `${rL}px ${rR}px ${rR}px ${rL}px`;
+      // ROW_H: baseado no dia mais cheio
+      let maxDayHs = NORMAL_HS;
+      Object.values(dayMap).forEach(dList => {
+        const s=dList.reduce((a,b)=>a+(b.dayHs??b.sub.hsFallback),0);
+        if(s>maxDayHs) maxDayHs=s;
+      });
+      row.style.minHeight=(PAD*2+maxDayHs*PX_PER_HS)+'px';
+
+      // Renderiza cada dia de forma independente
+      Object.entries(dayMap).forEach(([diStr,dayBList])=>{
+        const di=parseInt(diStr);
+        const totalDayHs=dayBList.reduce((a,b)=>a+(b.dayHs??b.sub.hsFallback),0);
+        const over=totalDayHs>NORMAL_HS;
+        let topOff=PAD;
+
+        if(over){const ind=document.createElement('div');ind.style.cssText=`position:absolute;left:${di*DAY_W+3}px;width:${DAY_W-6}px;bottom:2px;height:4px;background:#e03131;border-radius:2px;z-index:6;`;ind.title=`${totalDayHs}HS`;pdays.appendChild(ind);}
+
+        dayBList.forEach(b=>{
+          const {sub,dayHs,wpStart,colStart,colEnd}=b;
+          const thisHs=dayHs??sub.hsFallback;
+          const blkH=Math.max(14,Math.round(thisHs*PX_PER_HS));
+          const topOffset=topOff; topOff+=blkH+GAP;
+
+          const hasPrev=dayMap[di-1]?.find(x=>x.sub.subId===sub.subId);
+          const hasNext=dayMap[di+1]?.find(x=>x.sub.subId===sub.subId);
+          const rL=hasPrev?0:5, rR=hasNext?0:5;
+          const br=`${rL}px ${rR}px ${rR}px ${rL}px`;
+          const left=di*DAY_W+(hasPrev?0:3);
+          const width=DAY_W-(hasPrev?0:3)-(hasNext?0:3);
+
+          const isConcluido=/concluí/i.test(sub.status||'');
+          const isAndamento=/andamento|pausad/i.test(sub.status||'');
+          let extraStyle='';
+          if(isConcluido) extraStyle+='opacity:0.58;';
+          if(isAndamento) extraStyle+='outline:2px solid rgba(255,255,255,0.75);outline-offset:-2px;';
+
           const blk=document.createElement('div');
-          blk.className='blk'+(over?' over':'');
+          blk.className='blk';
           blk.style.cssText=`left:${left}px;width:${width}px;top:${topOffset}px;height:${blkH}px;background:${cliColor(sub.clientCode)};border-radius:${br};${extraStyle}`;
-          blk.title = sub.jobName;
-          const showSub = blkH >= 26;
-          blk.innerHTML = `<div class="blk-job">${sub.jobName}</div>`
-            + (showSub && sub.status ? `<div class="blk-tp">${sub.status} · HS ${thisHs}</div>` : '');
+          blk.title=sub.jobName;
+          const showSub=blkH>=26;
+          blk.innerHTML=`<div class="blk-job">${sub.jobName}</div>`+(showSub&&sub.status?`<div class="blk-tp">${sub.status} · HS ${thisHs}</div>`:'');
 
-          // X por dia — apenas para admins
-          if(isAdmin) {
-            const totalDaysInSeg = colEnd - colStart + 1;
-            const nonZeroCount = (sub.hsd||[]).filter(v=>v>0).length || 1;
-            for(let di=0; di<totalDaysInSeg; di++){
-            const wp = (wpStart??0) + di;
-            const xBtn = document.createElement('button');
-            xBtn.className = 'blk-day-x';
-            xBtn.textContent = '×';
-            xBtn.style.left = (di * DAY_W + DAY_W/2 - 7) + 'px';
-            xBtn.title = `Zerar dia ${di+1}`;
-            // Não mostra X se for o último dia não-zero
-            if(nonZeroCount <= 1) xBtn.style.display='none';
-            xBtn.addEventListener('click', e => {
-              e.stopPropagation();
-              const currentHsd = sub.hsd ? [...sub.hsd] : Array(wp+1).fill(thisHs);
-              // Garante que o array tem posições suficientes
-              while(currentHsd.length <= wp) currentHsd.push(currentHsd[currentHsd.length-1] ?? thisHs);
-              const newHsd = [...currentHsd];
-              newHsd[wp] = 0;
-              // Não permite ficar tudo a zero
-              if(newHsd.filter(v=>v>0).length === 0) { showToast('Não podes apagar o último dia.', true); return; }
-              pushUndo('hs', sub, [...currentHsd]);
-              sub.hsd = newHsd;
-              updateHSD(sub, newHsd);
-              render();
-            });
+          // X por dia (admin)
+          if(isAdmin){
+            const wp=(wpStart??0)+(di-colStart);
+            const nonZero=(sub.hsd||[]).filter(v=>v>0).length||1;
+            const xBtn=document.createElement('button');xBtn.className='blk-day-x';xBtn.textContent='×';xBtn.style.left=(DAY_W/2-7)+'px';
+            if(nonZero<=1)xBtn.style.display='none';
+            xBtn.addEventListener('click',e=>{e.stopPropagation();const cur=sub.hsd?[...sub.hsd]:Array(wp+1).fill(thisHs);while(cur.length<=wp)cur.push(cur[cur.length-1]??thisHs);const nw=[...cur];nw[wp]=0;if(nw.filter(v=>v>0).length===0){showToast('Não podes apagar o último dia.',true);return;}pushUndo('hs',sub,[...cur]);sub.hsd=nw;updateHSD(sub,nw);render();});
             blk.appendChild(xBtn);
           }
-          } // fim if(isAdmin) X buttons
 
-          // Handle direito — altera data fim
-          const rsR = document.createElement('div'); rsR.className='rs-right';
-          blk.appendChild(rsR);
-          rsR.addEventListener('mousedown', e => {
-            e.stopPropagation(); e.preventDefault();
-            const startX = e.clientX;
-            const origDays = Math.round((sub.range.end - sub.range.start) / 86400000);
-            showDragTip(`→ ${sub.range.end.getDate()} ${MON_PT[sub.range.end.getMonth()]}`, e.clientX, e.clientY);
-            function onMove(ev) {
-              const delta = Math.round((ev.clientX - startX) / DAY_W);
-              const pending = new Date(sub.range.start.getTime() + Math.max(0, origDays + delta) * 86400000);
-              blk._pendingEnd = pending;
-              blk.title = `→ ${pending.getDate()} ${MON_PT[pending.getMonth()]}`;
-              showDragTip(`→ ${pending.getDate()} ${MON_PT[pending.getMonth()]}`, ev.clientX, ev.clientY);
+          // Menu ⋮
+          const menuBtn=document.createElement('button');menuBtn.className='blk-menu-btn';menuBtn.textContent='⋮';blk.appendChild(menuBtn);
+          menuBtn.addEventListener('click',e=>{e.stopPropagation();const dd=document.getElementById('blk-dd');const rect=menuBtn.getBoundingClientRect();dd.innerHTML='';
+            const mkLabel=t=>{const d=document.createElement('div');d.className='dd-label';d.textContent=t;return d;};
+            const mkSep=()=>{const d=document.createElement('div');d.className='dd-sep';return d;};
+            const mkItem=(icon,label,fn)=>{const d=document.createElement('div');d.className='dd-item';d.innerHTML=icon+' '+label;d.addEventListener('click',()=>{closeDD();fn();});return d;};
+            dd.appendChild(mkLabel('Job'));dd.appendChild(mkItem('📋',sub.jobName||'Abrir Job',()=>monday.execute('openItemCard',{itemId:parseInt(sub.parentId)})));
+            if(sub.siblings&&sub.siblings.length){dd.appendChild(mkSep());dd.appendChild(mkLabel('Subelemento'));sub.siblings.forEach(sib=>{const isMe=sib.subId===sub.subId;const itm=mkItem(isMe?'▶':'↳',sib.tipo||'Subitem',()=>monday.execute('openItemCard',{itemId:parseInt(sib.subId)}));if(isMe)itm.style.color='#7c83f5';dd.appendChild(itm);});}
+            const ddW=180;let lft=rect.right+4;if(lft+ddW>window.innerWidth)lft=rect.left-ddW-4;
+            dd.style.cssText=`display:block;top:${rect.bottom+2}px;left:${Math.max(4,lft)}px`;});
+
+          blk.addEventListener('click',e=>{if(e._dragged)return;monday.execute('openItemCard',{itemId:parseInt(sub.subId)});});
+
+          // Drag: reordenar ou mover datas
+          blk.addEventListener('mousedown',e=>{
+            if(e.shiftKey){
+              e.stopPropagation();e.preventDefault();
+              const startX=e.clientX;let dragDi=di;
+              const ghost=document.createElement('div');ghost.style.cssText='position:fixed;opacity:0.55;pointer-events:none;z-index:9999;background:'+cliColor(sub.clientCode)+';border-radius:5px;padding:3px 7px;font-size:10px;color:#fff;font-weight:600;white-space:nowrap';ghost.textContent='+'+sub.jobName;document.body.appendChild(ghost);
+              function onM(ev){const delta=Math.round((ev.clientX-startX)/DAY_W);dragDi=di+delta;ghost.style.left=(ev.clientX+10)+'px';ghost.style.top=(ev.clientY+10)+'px';const dD=days[Math.max(0,dragDi)];if(dD)ghost.textContent=`+${dD.getDate()}/${dD.getMonth()+1}`;}
+              function onU(){document.removeEventListener('mousemove',onM);document.removeEventListener('mouseup',onU);ghost.remove();if(dragDi===di)return;const nsd=days[Math.max(0,dragDi)];if(!nsd)return;const es=new Date(Math.min(sub.range.start,nsd));const ee=new Date(Math.max(sub.range.end,nsd));const aw=[];getAllDays().forEach(d=>{if(d>=es&&d<=ee&&!isBlocked(d))aw.push(d);});const origW=[];getAllDays().forEach(d=>{if(d>=sub.range.start&&d<=sub.range.end&&!isBlocked(d))origW.push(fmtD(d));});const lH=sub.hsd?(sub.hsd[sub.hsd.length-1]??sub.hsFallback):sub.hsFallback;const nHsd=aw.map(d=>{const ds=fmtD(d);const op=origW.indexOf(ds);if(op!==-1){if(!sub.hsd||sub.hsd.length===0)return sub.hsFallback;return sub.hsd[Math.min(op,sub.hsd.length-1)];}if(fmtD(nsd)===ds)return lH;return 0;});sub.range.start=es;sub.range.end=ee;sub.hsd=nHsd;updateRange(sub,es,ee);updateHSD(sub,nHsd);render();}
+              document.addEventListener('mousemove',onM);document.addEventListener('mouseup',onU);
+              return;
             }
-            function onUp() {
-              document.removeEventListener('mousemove', onMove);
-              document.removeEventListener('mouseup', onUp);
-              hideDragTip();
-              blk.title = sub.jobName;
-              if(blk._pendingEnd) {
-                pushUndo('range', sub, { start: new Date(sub.range.start), end: new Date(sub.range.end) });
-                sub.range.end = blk._pendingEnd;
-                updateRange(sub, sub.range.start, blk._pendingEnd);
-                delete blk._pendingEnd;
-                render();
-              }
-            }
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
+            if(e.target.classList.contains('rs-right')||e.target.classList.contains('rs-left')||e.target.classList.contains('rs-bottom')||e.target.classList.contains('rs-top')||e.target.classList.contains('blk-menu-btn'))return;
+            const startX=e.clientX,startY=e.clientY;let mode=null;
+            const ghost=document.createElement('div');ghost.style.cssText='position:fixed;opacity:0.6;pointer-events:none;z-index:9999;border-radius:5px;background:'+cliColor(sub.clientCode)+';padding:4px 8px;font-size:10px;color:#fff;font-weight:600;white-space:nowrap;display:none';ghost.textContent=sub.jobName;document.body.appendChild(ghost);
+            function onMove(ev){const dx=ev.clientX-startX,dy=ev.clientY-startY;if(!mode&&(Math.abs(dx)>12||Math.abs(dy)>12))mode=Math.abs(dy)>Math.abs(dx)?'reorder':'move';if(mode==='reorder'){ev._dragged=true;ghost.style.display='block';ghost.style.left=(ev.clientX+10)+'px';ghost.style.top=(ev.clientY+10)+'px';blk.style.opacity='0.4';}else if(mode==='move'){const delta=Math.round(dx/DAY_W);const ns=new Date(sub.range.start.getTime()+delta*86400000);const ne=new Date(sub.range.end.getTime()+delta*86400000);blk._pendingStart=ns;blk._pendingEnd=ne;blk.style.opacity='0.7';ghost.style.display='block';ghost.style.left=(ev.clientX+10)+'px';ghost.style.top=(ev.clientY+10)+'px';ghost.textContent=`${ns.getDate()} ${MON_PT[ns.getMonth()]} → ${ne.getDate()} ${MON_PT[ne.getMonth()]}`;}}
+            function onUp(ev){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);ghost.remove();blk.style.opacity='1';if(mode==='reorder'){const allBlks=[...document.querySelectorAll('.blk')];const tgt=allBlks.find(b2=>{if(b2===blk)return false;const r=b2.getBoundingClientRect();return ev.clientY>=r.top&&ev.clientY<=r.bottom;});if(tgt&&tgt._subId){const arr=[...new Set([...sortedSubs.map(s=>s.subId)])];const fi=arr.indexOf(sub.subId),ti=arr.indexOf(tgt._subId);if(fi!==-1&&ti!==-1){arr.splice(fi,1);arr.splice(ti,0,sub.subId);}subOrder[p.person]=arr;localStorage.setItem(`subOrder_${boardFilterKey}`,JSON.stringify(subOrder));render();}}else if(mode==='move'&&blk._pendingStart){ev._dragged=true;pushUndo('range',sub,{start:new Date(sub.range.start),end:new Date(sub.range.end)});sub.range.start=blk._pendingStart;sub.range.end=blk._pendingEnd;updateRange(sub,blk._pendingStart,blk._pendingEnd);delete blk._pendingStart;delete blk._pendingEnd;render();}}
+            document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
           });
+          blk._subId=sub.subId;
 
-          // Handle esquerdo — altera data início
-          const rsL = document.createElement('div'); rsL.className='rs-left';
-          blk.appendChild(rsL);
-          rsL.addEventListener('mousedown', e => {
-            e.stopPropagation(); e.preventDefault();
-            const startX = e.clientX;
-            const origStart = new Date(sub.range.start);
-            function onMove(ev) {
-              const delta = Math.round((ev.clientX - startX) / DAY_W);
-              const newStart = new Date(origStart.getTime() + delta * 86400000);
-              if(newStart < sub.range.end) blk._pendingStart = newStart;
-            }
-            function onUp() {
-              document.removeEventListener('mousemove', onMove);
-              document.removeEventListener('mouseup', onUp);
-              if(blk._pendingStart) {
-                pushUndo('range', sub, { start: new Date(sub.range.start), end: new Date(sub.range.end) });
-                sub.range.start = blk._pendingStart;
-                updateRange(sub, blk._pendingStart, sub.range.end);
-                delete blk._pendingStart;
-                render();
-              }
-            }
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-          });
+          // Handles resize
+          const rsR=document.createElement('div');rsR.className='rs-right';blk.appendChild(rsR);
+          rsR.addEventListener('mousedown',e=>{e.stopPropagation();e.preventDefault();const startX=e.clientX;const origDays=Math.round((sub.range.end-sub.range.start)/86400000);showDragTip(`→ ${sub.range.end.getDate()} ${MON_PT[sub.range.end.getMonth()]}`,e.clientX,e.clientY);function onMove(ev){const delta=Math.round((ev.clientX-startX)/DAY_W);const pending=new Date(sub.range.start.getTime()+Math.max(0,origDays+delta)*86400000);blk._pendingEnd=pending;showDragTip(`→ ${pending.getDate()} ${MON_PT[pending.getMonth()]}`,ev.clientX,ev.clientY);}function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);hideDragTip();if(blk._pendingEnd){pushUndo('range',sub,{start:new Date(sub.range.start),end:new Date(sub.range.end)});sub.range.end=blk._pendingEnd;updateRange(sub,sub.range.start,blk._pendingEnd);delete blk._pendingEnd;render();}}document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);});
 
-          // Handle inferior — aumenta HS
-          const rsB = document.createElement('div'); rsB.className='rs-bottom';
-          blk.appendChild(rsB);
-          rsB.addEventListener('mousedown', e => {
-            e.stopPropagation(); e.preventDefault();
-            const startY = e.clientY; const startHs = dayHs ?? sub.hsFallback;
-            showDragTip(`HS: ${startHs}`, e.clientX, e.clientY);
-            function onMove(ev) {
-              const delta = Math.round((ev.clientY - startY) / PX_PER_HS);
-              const pending = Math.max(1, startHs + delta);
-              blk._pendingHs = pending;
-              blk.title = `HS: ${pending}`;
-              showDragTip(`HS: ${pending}`, ev.clientX, ev.clientY);
-            }
-            function onUp() {
-              document.removeEventListener('mousemove', onMove);
-              document.removeEventListener('mouseup', onUp);
-              hideDragTip();
-              blk.title = sub.jobName;
-              if(blk._pendingHs && blk._pendingHs !== startHs) {
-                const newHsd = (sub.hsd||[sub.hsFallback]).map(v => v===startHs ? blk._pendingHs : v);
-                pushUndo('hs', sub, sub.hsd ? [...sub.hsd] : [sub.hsFallback]);
-                sub.hsd = newHsd;
-                updateHSD(sub, newHsd);
-                delete blk._pendingHs;
-                render();
-              }
-            }
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-          });
+          const rsL=document.createElement('div');rsL.className='rs-left';blk.appendChild(rsL);
+          rsL.addEventListener('mousedown',e=>{e.stopPropagation();e.preventDefault();const startX=e.clientX;const origStart=new Date(sub.range.start);function onMove(ev){const delta=Math.round((ev.clientX-startX)/DAY_W);const ns=new Date(origStart.getTime()+delta*86400000);if(ns<sub.range.end)blk._pendingStart=ns;}function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);if(blk._pendingStart){pushUndo('range',sub,{start:new Date(sub.range.start),end:new Date(sub.range.end)});sub.range.start=blk._pendingStart;updateRange(sub,blk._pendingStart,sub.range.end);delete blk._pendingStart;render();}}document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);});
 
-          // Handle superior — diminui HS
-          const rsT = document.createElement('div'); rsT.className='rs-top';
-          blk.appendChild(rsT);
-          rsT.addEventListener('mousedown', e => {
-            e.stopPropagation(); e.preventDefault();
-            const startY = e.clientY; const startHs = dayHs ?? sub.hsFallback;
-            showDragTip(`HS: ${startHs}`, e.clientX, e.clientY);
-            function onMove(ev) {
-              const delta = Math.round((ev.clientY - startY) / PX_PER_HS);
-              const pending = Math.max(1, startHs - delta);
-              blk._pendingHs = pending;
-              blk.title = `HS: ${pending}`;
-              showDragTip(`HS: ${pending}`, ev.clientX, ev.clientY);
-            }
-            function onUp() {
-              document.removeEventListener('mousemove', onMove);
-              document.removeEventListener('mouseup', onUp);
-              hideDragTip(); blk.title = sub.jobName;
-              if(blk._pendingHs && blk._pendingHs !== startHs) {
-                const newHsd = (sub.hsd||[sub.hsFallback]).map(v => v===startHs ? blk._pendingHs : v);
-                pushUndo('hs', sub, sub.hsd ? [...sub.hsd] : [sub.hsFallback]);
-                sub.hsd = newHsd;
-                updateHSD(sub, newHsd);
-                delete blk._pendingHs;
-                render();
-              }
-            }
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-          });
+          const rsB=document.createElement('div');rsB.className='rs-bottom';blk.appendChild(rsB);
+          rsB.addEventListener('mousedown',e=>{e.stopPropagation();e.preventDefault();const startY=e.clientY;const startHs=dayHs??sub.hsFallback;showDragTip(`HS: ${startHs}`,e.clientX,e.clientY);function onMove(ev){const pending=Math.max(1,startHs+Math.round((ev.clientY-startY)/PX_PER_HS));blk._pendingHs=pending;showDragTip(`HS: ${pending}`,ev.clientX,ev.clientY);}function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);hideDragTip();if(blk._pendingHs&&blk._pendingHs!==startHs){const nw=(sub.hsd||[sub.hsFallback]).map(v=>v===startHs?blk._pendingHs:v);pushUndo('hs',sub,sub.hsd?[...sub.hsd]:[sub.hsFallback]);sub.hsd=nw;updateHSD(sub,nw);delete blk._pendingHs;render();}}document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);});
 
-          blk.addEventListener('click', e => {
-            if(e._dragged) return;
-            monday.execute('openItemCard', {itemId: parseInt(sub.subId)});
-          });
-
-          // Shift+arrastar — cria novo segmento e actualiza HSD + Cronograma
-          blk.addEventListener('mousedown', e => {
-            if(!e.shiftKey) return;
-            if(e.target.classList.contains('rs-right')||e.target.classList.contains('rs-left')||
-               e.target.classList.contains('rs-bottom')||e.target.classList.contains('rs-top')||
-               e.target.classList.contains('blk-menu-btn')) return;
-            e.stopPropagation(); e.preventDefault();
-            const startX = e.clientX;
-            let dragColStart = colStart, dragColEnd = colEnd;
-            const ghost = document.createElement('div');
-            ghost.style.cssText = `position:fixed;opacity:0.55;pointer-events:none;z-index:9999;
-              background:${cliColor(sub.clientCode)};border-radius:5px;padding:3px 7px;
-              font-size:10px;color:#fff;font-weight:600;white-space:nowrap`;
-            ghost.textContent = '+ ' + sub.jobName;
-            document.body.appendChild(ghost);
-
-            function onMove(ev) {
-              const delta = Math.round((ev.clientX - startX) / DAY_W);
-              dragColStart = colStart + delta;
-              dragColEnd   = colEnd   + delta;
-              ghost.style.left = (ev.clientX + 10) + 'px';
-              ghost.style.top  = (ev.clientY + 10) + 'px';
-              const dS = days[Math.max(0, dragColStart)];
-              const dE = days[Math.min(TOTAL_DAYS-1, dragColEnd)];
-              if(dS && dE) ghost.textContent = `+ ${dS.getDate()}/${dS.getMonth()+1} → ${dE.getDate()}/${dE.getMonth()+1}`;
-            }
-            function onUp() {
-              document.removeEventListener('mousemove', onMove);
-              document.removeEventListener('mouseup', onUp);
-              ghost.remove();
-              if(dragColStart === colStart) return; // não moveu
-
-              const newSegStart = days[Math.max(0, dragColStart)];
-              const newSegEnd   = days[Math.min(TOTAL_DAYS-1, dragColEnd)];
-              if(!newSegStart || !newSegEnd) return;
-
-              // Nova range total: min→max
-              const extStart = new Date(Math.min(sub.range.start, newSegStart));
-              const extEnd   = new Date(Math.max(sub.range.end,   newSegEnd));
-
-              // Calcula todos os dias úteis na range extendida
-              const extWorkDays = [];
-              const allDays = getAllDays();
-              allDays.forEach(d => {
-                if(d >= extStart && d <= extEnd && !isBlocked(d)) extWorkDays.push(d);
-              });
-
-              // Para cada dia útil, calcula o HSD
-              const origWork = [];
-              allDays.forEach(d => {
-                if(d >= sub.range.start && d <= sub.range.end && !isBlocked(d)) origWork.push(fmtD(d));
-              });
-              const newSegWork = [];
-              allDays.forEach(d => {
-                if(d >= newSegStart && d <= newSegEnd && !isBlocked(d)) newSegWork.push(fmtD(d));
-              });
-
-              const lastOrigHs = sub.hsd ? (sub.hsd[sub.hsd.length-1] ?? sub.hsFallback) : sub.hsFallback;
-
-              const newHsd = extWorkDays.map(d => {
-                const ds = fmtD(d);
-                const origPos = origWork.indexOf(ds);
-                if(origPos !== -1) {
-                  // Dia original → usa valor HSD original
-                  if(!sub.hsd||sub.hsd.length===0) return sub.hsFallback;
-                  return sub.hsd[Math.min(origPos, sub.hsd.length-1)];
-                }
-                if(newSegWork.includes(ds)) return lastOrigHs; // novo segmento
-                return 0; // gap
-              });
-
-              sub.range.start = extStart;
-              sub.range.end   = extEnd;
-              sub.hsd = newHsd;
-
-              updateRange(sub, extStart, extEnd);
-              updateHSD(sub, newHsd);
-              render();
-            }
-            document.addEventListener('mousemove', onMove);
-            document.addEventListener('mouseup', onUp);
-          });
-
-          // Arrastar normal (sem Shift)
-          // Arrastar verticalmente muda a ordem da pessoa
-          blk.addEventListener('mousedown', e => {
-            if(e.target.classList.contains('rs-right')||e.target.classList.contains('rs-left')||
-               e.target.classList.contains('rs-bottom')||e.target.classList.contains('rs-top')||
-               e.target.classList.contains('blk-menu-btn')) return;
-            const startX=e.clientX, startY=e.clientY;
-            let mode=null; // 'reorder' | 'move'
-            const ghost = document.createElement('div');
-            ghost.style.cssText=`position:fixed;opacity:0.6;pointer-events:none;z-index:9999;border-radius:5px;background:${cliColor(sub.clientCode)};padding:4px 8px;font-size:10px;color:#fff;font-weight:600;white-space:nowrap;display:none`;
-            ghost.textContent=sub.jobName;
-            document.body.appendChild(ghost);
-
-            function onMove(ev) {
-              const dx=ev.clientX-startX, dy=ev.clientY-startY;
-              if(!mode && (Math.abs(dx)>12||Math.abs(dy)>12)) {
-                mode = Math.abs(dy)>Math.abs(dx) ? 'reorder' : 'move';
-              }
-              if(mode==='reorder') {
-                ev._dragged=true;
-                ghost.style.display='block';
-                ghost.style.left=(ev.clientX+10)+'px';
-                ghost.style.top=(ev.clientY+10)+'px';
-                blk.style.opacity='0.4';
-              } else if(mode==='move') {
-                const delta=Math.round(dx/DAY_W);
-                const newStart=new Date(sub.range.start.getTime()+delta*86400000);
-                const newEnd=new Date(sub.range.end.getTime()+delta*86400000);
-                blk._pendingStart=newStart; blk._pendingEnd=newEnd;
-                blk.style.opacity='0.7';
-                // Feedback: mostra as datas
-                ghost.style.display='block';
-                ghost.style.left=(ev.clientX+10)+'px';
-                ghost.style.top=(ev.clientY+10)+'px';
-                ghost.textContent=`${newStart.getDate()} ${MON_PT[newStart.getMonth()]} → ${newEnd.getDate()} ${MON_PT[newEnd.getMonth()]}`;
-              }
-            }
-
-            function onUp(ev) {
-              document.removeEventListener('mousemove',onMove);
-              document.removeEventListener('mouseup',onUp);
-              ghost.remove();
-              blk.style.opacity='1';
-
-              if(mode==='reorder') {
-                // Encontra qual bloco está na posição Y atual
-                const allBlks = [...document.querySelectorAll('.blk')];
-                const targetBlk = allBlks.find(b=>{
-                  if(b===blk) return false;
-                  const r=b.getBoundingClientRect();
-                  return ev.clientY>=r.top && ev.clientY<=r.bottom;
-                });
-                if(targetBlk && targetBlk._subId) {
-                  const arr=[...new Set([...sortedSubs.map(s=>s.subId)])];
-                  const fromIdx=arr.indexOf(sub.subId);
-                  const toIdx=arr.indexOf(targetBlk._subId);
-                  if(fromIdx!==-1&&toIdx!==-1) {
-                    arr.splice(fromIdx,1); arr.splice(toIdx,0,sub.subId);
-                  }
-                  subOrder[p.person]=arr;
-                  localStorage.setItem(`subOrder_${boardFilterKey}`,JSON.stringify(subOrder));
-                  render();
-                }
-              } else if(mode==='move' && blk._pendingStart) {
-                ev._dragged=true;
-                pushUndo('range',sub,{start:new Date(sub.range.start),end:new Date(sub.range.end)});
-                sub.range.start=blk._pendingStart; sub.range.end=blk._pendingEnd;
-                updateRange(sub,blk._pendingStart,blk._pendingEnd);
-                delete blk._pendingStart; delete blk._pendingEnd;
-                render();
-              } else if(!mode) {
-                // click simples
-              }
-            }
-            document.addEventListener('mousemove',onMove);
-            document.addEventListener('mouseup',onUp);
-          });
-          blk._subId = sub.subId; // para o drag-to-reorder identificar o alvo
-
-          // ⋮ Menu de contexto
-          const menuBtn = document.createElement('button');
-          menuBtn.className='blk-menu-btn'; menuBtn.textContent='⋮';
-          blk.appendChild(menuBtn);
-          menuBtn.addEventListener('click', e => {
-            e.stopPropagation();
-            const dd = document.getElementById('blk-dd');
-            const rect = menuBtn.getBoundingClientRect();
-            dd.innerHTML='';
-            const mkLabel = t => { const d=document.createElement('div'); d.className='dd-label'; d.textContent=t; return d; };
-            const mkSep   = () => { const d=document.createElement('div'); d.className='dd-sep'; return d; };
-            const mkItem  = (icon,label,fn) => {
-              const d=document.createElement('div'); d.className='dd-item';
-              d.innerHTML=icon+' '+label;
-              d.addEventListener('click',()=>{ closeDD(); fn(); });
-              return d;
-            };
-            dd.appendChild(mkLabel('Job'));
-            dd.appendChild(mkItem('📋', sub.jobName||'Abrir Job', ()=>monday.execute('openItemCard',{itemId:parseInt(sub.parentId)})));
-            if(sub.siblings && sub.siblings.length){
-              dd.appendChild(mkSep());
-            dd.appendChild(mkLabel('Subelemento'));
-              sub.siblings.forEach(sib=>{
-                const isMe = sib.subId===sub.subId;
-                const itm = mkItem(isMe?'▶':'↳', sib.tipo||'Subitem', ()=>monday.execute('openItemCard',{itemId:parseInt(sib.subId)}));
-                if(isMe) itm.style.color='#7c83f5';
-                dd.appendChild(itm);
-              });
-            }
-            const ddW=180;
-            let left=rect.right+4;
-            if(left+ddW>window.innerWidth) left=rect.left-ddW-4;
-            dd.style.cssText=`display:block;top:${rect.bottom+2}px;left:${Math.max(4,left)}px`;
-          });
+          const rsT=document.createElement('div');rsT.className='rs-top';blk.appendChild(rsT);
+          rsT.addEventListener('mousedown',e=>{e.stopPropagation();e.preventDefault();const startY=e.clientY;const startHs=dayHs??sub.hsFallback;showDragTip(`HS: ${startHs}`,e.clientX,e.clientY);function onMove(ev){const pending=Math.max(1,startHs-Math.round((ev.clientY-startY)/PX_PER_HS));blk._pendingHs=pending;showDragTip(`HS: ${pending}`,ev.clientX,ev.clientY);}function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);hideDragTip();if(blk._pendingHs&&blk._pendingHs!==startHs){const nw=(sub.hsd||[sub.hsFallback]).map(v=>v===startHs?blk._pendingHs:v);pushUndo('hs',sub,sub.hsd?[...sub.hsd]:[sub.hsFallback]);sub.hsd=nw;updateHSD(sub,nw);delete blk._pendingHs;render();}}document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);});
 
           pdays.appendChild(blk);
         });
       });
     });
 
-    // Scroll label inicial
+        // Scroll label inicial
     updateWeekLabel(days);
   }
 
