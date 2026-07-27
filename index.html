@@ -268,7 +268,9 @@ function initApp(monday) {
   // Captura o boardId imediatamente (antes do listen que pode demorar)
   monday.get('context').then(res => {
     const bid = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
-    if(bid) boardFilterKey = String(bid);
+    const vid = res.data.viewId || res.data.appFeatureId || res.data.instanceId || res.data.boardViewId || '';
+    const key = vid ? String(vid) : (bid ? String(bid) : '9mm');
+    boardFilterKey = key;
   }).catch(() => {});
   let userPhotoMap = {};
   let userNameById = {};
@@ -771,7 +773,7 @@ function initApp(monday) {
 
       // Células de dias
       const pdays = document.createElement('div'); pdays.className='pdays';
-      pdays.style.width=(TOTAL_DAYS*DAY_W)+'px'; pdays.style.position='relative';
+      pdays.style.cssText=`width:${TOTAL_DAYS*DAY_W}px;position:relative;overflow:hidden;`;
       days.forEach(d=>{
         const cell=document.createElement('div');
         cell.className='pdcell'+(isToday(d)?' today-col':'')+(isWknd(d)?' wknd-col':'')+(isHoliday(d)?' holiday-col':'');
@@ -807,21 +809,21 @@ function initApp(monday) {
           const curHs=hsAt(workPos);
           const consecutive=k>0&&workDays[k-1].dayIndex===dayIndex-1;
           if(curHs===0){
-            if(segStart!==-1){ blocks.push({sub,colStart:segStart,colEnd:workDays[k-1].dayIndex,dayHs:segHs,wpStart:segWpStart,wpEnd:workPos-1}); segStart=-1; segHs=null; segWpStart=-1; }
+            if(segStart!==-1){ blocks.push({sub,colStart:segStart,colEnd:Math.min(workDays[k-1].dayIndex,TOTAL_DAYS-1),dayHs:segHs,wpStart:segWpStart,wpEnd:workPos-1}); segStart=-1; segHs=null; segWpStart=-1; }
             return;
           }
           if(segStart===-1){ segStart=dayIndex; segHs=curHs; segWpStart=workPos; }
           else if(!consecutive){
-            blocks.push({sub,colStart:segStart,colEnd:workDays[k-1].dayIndex,dayHs:segHs,wpStart:segWpStart,wpEnd:workPos-1});
+            blocks.push({sub,colStart:segStart,colEnd:Math.min(workDays[k-1].dayIndex,TOTAL_DAYS-1),dayHs:segHs,wpStart:segWpStart,wpEnd:workPos-1});
             segStart=dayIndex; segHs=curHs; segWpStart=workPos;
           }
           // Mesmo sub, consecutivo, HS diferente → novo bloco mas sem gap visual
           else if(curHs!==segHs){
-            blocks.push({sub,colStart:segStart,colEnd:workDays[k-1].dayIndex,dayHs:segHs,wpStart:segWpStart,wpEnd:workPos-1,noGapRight:true});
+            blocks.push({sub,colStart:segStart,colEnd:Math.min(workDays[k-1].dayIndex,TOTAL_DAYS-1),dayHs:segHs,wpStart:segWpStart,wpEnd:workPos-1,noGapRight:true});
             segStart=dayIndex; segHs=curHs; segWpStart=workPos;
           }
         });
-        if(segStart!==-1) blocks.push({sub,colStart:segStart,colEnd:workDays[workDays.length-1].dayIndex,dayHs:segHs,wpStart:segWpStart,wpEnd:workDays[workDays.length-1].workPos});
+        if(segStart!==-1) blocks.push({sub,colStart:segStart,colEnd:Math.min(workDays[workDays.length-1].dayIndex, TOTAL_DAYS-1),dayHs:segHs,wpStart:segWpStart,wpEnd:workDays[workDays.length-1].workPos});
       });
 
       // Post-processamento: marca noGapLeft nos blocos que seguem um noGapRight do mesmo sub
@@ -1447,10 +1449,12 @@ function initApp(monday) {
 
   // ── Init ──────────────────────────────────────────────────
   monday.listen('context', async res => {
+    console.log('Full context:', JSON.stringify(res.data));
     const boardId = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
+    const viewId = res.data.viewId || res.data.appFeatureId || res.data.instanceId || res.data.boardViewId || '';
     currentBoardId = boardId;
-    boardFilterKey = boardId ? String(boardId) : '9mm';
-    console.log('Board:', boardFilterKey, '| context:', JSON.stringify({boardId: res.data.boardId, boardIds: res.data.boardIds}));
+    boardFilterKey = viewId ? String(viewId) : (boardId ? String(boardId) : '9mm');
+    console.log('Board:', boardId, '| View:', viewId, '| Key:', boardFilterKey);
 
     const currentUserName = res.data.user?.name || '';
     const currentUserId   = res.data.user?.id;
