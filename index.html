@@ -1421,19 +1421,12 @@ function initApp(monday) {
     currentBoardId = boardId;
     boardFilterKey = boardId || '9mm';
 
-    // Carrega filtros específicos deste board
-    if(isAdmin) {
-      selPersons = JSON.parse(localStorage.getItem(`filter_persons_${boardFilterKey}`) || '[]');
-      selTipo    = localStorage.getItem(`filter_tipo_${boardFilterKey}`)   || '';
-      selSetor   = localStorage.getItem(`filter_setor_${boardFilterKey}`)  || '';
-      sortMode   = localStorage.getItem(`filter_sort_${boardFilterKey}`)   || 'custom';
-    }
     const currentUserName = res.data.user?.name || '';
     const currentUserId   = res.data.user?.id;
     isMainAdmin = res.data.user?.isAdmin === true ||
                   (ADMIN_USER_ID && String(currentUserId) === String(ADMIN_USER_ID));
 
-    // Carrega sub-admins do Monday Storage antes de decidir acesso
+    // Carrega sub-admins antes de decidir acesso
     await loadSubAdmins();
     const isSubAdmin = subAdmins.includes(String(currentUserId));
     isAdmin = isMainAdmin || isSubAdmin;
@@ -1441,36 +1434,121 @@ function initApp(monday) {
     if(isAdmin) document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');
     if(isMainAdmin) document.getElementById('baccess').style.display='inline-flex';
 
-    try {
-      const items = await fetchData(boardId);
-      allData = processItems(items);
-      await fetchUsers();
+    // Carrega filtros DEPOIS de saber se é admin
+    if(isAdmin) {
+      selPersons = JSON.parse(localStorage.getItem(`filter_persons_${boardFilterKey}`) || '[]');
+      selTipo    = localStorage.getItem(`filter_tipo_${boardFilterKey}`)   || '';
+      selSetor   = localStorage.getItem(`filter_setor_${boardFilterKey}`)  || '';
+      sortMode   = localStorage.getItem(`filter_sort_${boardFilterKey}`)   || 'custom';
+    }
 
-      // Resolve nome e filtra se não for admin
+    try {
+      // ── Cache de dados do board (5 min) ──────────────────────
+      const dataCacheKey = `board_cache_${boardFilterKey}`;
+      let hasCachedData = false;
+      try {
+        const raw = localStorage.getItem(dataCacheKey);
+        if(raw) {
+          const {ts, data} = JSON.parse(raw);
+          if(Date.now() - ts < 5 * 60 * 1000) {
+            // Restaura datas (JSON serializa Date como string)
+            const restored = JSON.parse(data, (k,v) => (v&&v.__d__) ? new Date(v.__d__) : v);
+            allData = restored;
+            hasCachedData = true;
+          }
+        }
+      } catch(e) {}
+
+      // ── Cache de fotos (1h) ───────────────────────────────────
+      const photoCache = localStorage.getItem('users_photo_cache_9mm');
+      if(photoCache) {
+        try { const {ts,data} = JSON.parse(photoCache); if(Date.now()-ts < 3600000) { Object.assign(userPhotoMap,data.photos); Object.assign(userNameById,data.names); } }
+        catch(e){}
+      }
+
+      // Se há cache, mostra imediatamente e actualiza em background
+      if(hasCachedData) {
+        if(!isAdmin) {
+          const resolvedName = currentUserName || userNameById[String(currentUserId)] || '';
+          selPersons = resolvedName ? [resolvedName] : [];
+        }
+        populateFilter(); populateTipo(); populateSetor();
+        if(isAdmin) {
+          document.getElementById('ftipo').value = selTipo;
+          document.getElementById('fsetor').value = selSetor;
+          updatePersonBtn();
+          document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort===sortMode));
+        }
+        document.getElementById('loading').style.display='none';
+        document.getElementById('tl-outer').style.display='flex';
+        render();
+        requestAnimationFrame(()=>{ const days=getAllDays(); const idx=todayIndex(days); if(idx>=0) wrap.scrollLeft=scrollXForIndex(idx); updateWeekLabel(days); });
+      }
+
+      // Corre fetchUsers em paralelo com dados (sempre, para fotos actualizadas)
+      const firstPagePromise = (async () => {
+        const query = `query { boards(ids:[${boardId}]) { items_page(limit:200) { cursor items { id name subitems { id name board{id columns{id title type}} column_values{id text value} } } } } }`;
+        const r = await monday.api(query);
+        return r.data.boards[0].items_page;
+      })();
+
+      const [firstPage] = await Promise.all([
+        firstPagePromise,
+        fetchUsers().then(() => {
+          // Guarda cache de fotos
+          localStorage.setItem('users_photo_cache_9mm', JSON.stringify({ts:Date.now(), data:{photos:userPhotoMap,names:userNameById}}));
+        }),
+        loadSubAdmins()
+      ]);
+
+      // Actualiza isAdmin com sub-admins carregados
+      const isSubAdmin2 = subAdmins.includes(String(currentUserId));
+      if(isSubAdmin2 && !isAdmin) {
+        isAdmin = true;
+        document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');
+      }
+
+      // Renderiza com a primeira página (ou actualiza se já havia cache)
+      let allItems = firstPage.items;
+      allData = processItems(allItems);
+
       if(!isAdmin) {
         const resolvedName = currentUserName || userNameById[String(currentUserId)] || '';
         selPersons = resolvedName ? [resolvedName] : [];
-        console.log('Membro filtrado para:', resolvedName || '(sem match)');
       }
 
-      populateFilter();
-      populateTipo();
-      populateSetor();
+      populateFilter(); populateTipo(); populateSetor();
       if(isAdmin) {
-        document.getElementById('ftipo').value   = selTipo;
-        document.getElementById('fsetor').value  = selSetor;
+        document.getElementById('ftipo').value = selTipo;
+        document.getElementById('fsetor').value = selSetor;
         updatePersonBtn();
         document.querySelectorAll('.sort-btn').forEach(b => b.classList.toggle('active', b.dataset.sort===sortMode));
       }
-      document.getElementById('loading').style.display='none';
-      document.getElementById('tl-outer').style.display='flex';
+      if(!hasCachedData) {
+        document.getElementById('loading').style.display='none';
+        document.getElementById('tl-outer').style.display='flex';
+        requestAnimationFrame(()=>{ const days=getAllDays(); const idx=todayIndex(days); if(idx>=0) wrap.scrollLeft=scrollXForIndex(idx); updateWeekLabel(days); });
+      }
       render();
-      requestAnimationFrame(()=>{
-        const days=getAllDays();
-        const idx=todayIndex(days);
-        if(idx>=0) wrap.scrollLeft=scrollXForIndex(idx);
-        updateWeekLabel(days);
-      });
+
+      // Carrega páginas seguintes em background (silencioso)
+      let cursor = firstPage.cursor;
+      while(cursor) {
+        const r = await monday.api(`query { boards(ids:[${boardId}]) { items_page(limit:200,cursor:"${cursor}") { cursor items { id name subitems { id name board{id columns{id title type}} column_values{id text value} } } } } }`);
+        const page = r.data.boards[0].items_page;
+        allItems = allItems.concat(page.items);
+        cursor = page.cursor || null;
+        allData = processItems(allItems);
+        populateFilter(); populateTipo(); populateSetor();
+        render();
+      }
+
+      // Guarda cache do board completo
+      try {
+        const serialized = JSON.stringify(allData, (k,v) => v instanceof Date ? {__d__:v.toISOString()} : v);
+        localStorage.setItem(`board_cache_${boardFilterKey}`, JSON.stringify({ts:Date.now(), data:serialized}));
+      } catch(e) {}
+
     } catch(err) {
       document.getElementById('loading').innerHTML=`<span style="color:#ef5350">Erro: ${err.message}</span>`;
       console.error(err);
