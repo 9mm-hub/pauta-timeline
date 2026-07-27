@@ -876,7 +876,7 @@ function initApp(monday) {
           const blk=document.createElement('div');
           blk.className='blk';
           blk.style.cssText=`left:${left}px;width:${width}px;top:${topOffset}px;height:${blkH}px;background:${cliColor(sub.clientCode)};border-radius:${br};${extraStyle}`;
-          blk.title=sub.jobName;
+          blk.title=sub.jobName+(sub.status?' · '+sub.status:'');
           const showSub=blkH>=26;
           blk.innerHTML=`<div class="blk-job">${sub.jobName}</div>`+(showSub&&sub.status?`<div class="blk-tp">${sub.status} · HS ${thisHs}</div>`:'');
 
