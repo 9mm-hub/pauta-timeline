@@ -124,6 +124,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#111;border:1px solid #333;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px;z-index:300;display:none}
 #toast.show{display:block}
 #toast.error{border-color:#e03131;color:#ff8787}
+/* Flyout submenu */
+.dd-item.has-flyout{position:relative;padding-right:26px}
+.dd-flyout-arrow{position:absolute;right:10px;color:#888;font-size:13px;pointer-events:none}
+.dd-flyout{display:none;position:absolute;left:calc(100% + 5px);top:-1px;background:#1e1e1e;border:1px solid #444;border-radius:8px;min-width:155px;z-index:10001;box-shadow:0 6px 20px rgba(0,0,0,0.6);overflow:hidden;white-space:nowrap}
+.dd-item.has-flyout:hover>.dd-flyout{display:block}
+.dd-flyout .dd-item{padding:8px 14px;font-size:12px}
 </style>
 </head>
 <body>
@@ -836,9 +842,34 @@ function initApp(monday) {
             const mkLabel=t=>{const d=document.createElement('div');d.className='dd-label';d.textContent=t;return d;};
             const mkSep=()=>{const d=document.createElement('div');d.className='dd-sep';return d;};
             const mkItem=(icon,label,fn)=>{const d=document.createElement('div');d.className='dd-item';d.innerHTML=icon+' '+label;d.addEventListener('click',()=>{closeDD();fn();});return d;};
-            dd.appendChild(mkLabel('Job'));dd.appendChild(mkItem('📋',sub.jobName||'Abrir Job',()=>monday.execute('openItemCard',{itemId:parseInt(sub.parentId)})));
+            // mkFlyoutItem: item com submenu hover
+            const mkFlyoutItem=(icon,label,openLabel,openFn,updatesFn)=>{
+              const d=document.createElement('div');d.className='dd-item has-flyout';
+              d.innerHTML=icon+' '+label+'<span class="dd-flyout-arrow">›</span>';
+              const fly=document.createElement('div');fly.className='dd-flyout';
+              const o1=document.createElement('div');o1.className='dd-item';o1.innerHTML='↗ '+openLabel;
+              o1.addEventListener('click',()=>{closeDD();openFn();});
+              const o2=document.createElement('div');o2.className='dd-item';o2.innerHTML='💬 Atualizações';
+              o2.addEventListener('click',()=>{closeDD();updatesFn();});
+              fly.appendChild(o1);fly.appendChild(o2);d.appendChild(fly);
+              // Flip flyout para esquerda se muito perto da borda direita
+              d.addEventListener('mouseenter',()=>{
+                const r=d.getBoundingClientRect();
+                fly.style.left=r.right+160>window.innerWidth?'auto':'calc(100% + 5px)';
+                fly.style.right=r.right+160>window.innerWidth?'calc(100% + 5px)':'auto';
+              });
+              return d;
+            };
+            dd.appendChild(mkLabel('Job'));
+            dd.appendChild(mkFlyoutItem('📋',sub.jobName||'Abrir Item','Abrir Item',
+              ()=>monday.execute('openItemCard',{itemId:parseInt(sub.parentId)}),
+              ()=>monday.execute('openItemCard',{itemId:parseInt(sub.parentId),kind:'updates'})
+            ));
             if(sub.siblings&&sub.siblings.length){dd.appendChild(mkSep());dd.appendChild(mkLabel('Subelemento'));sub.siblings.forEach(sib=>{const isMe=sib.subId===sub.subId;
-              const itm=mkItem(isMe?'▶':'↳',sib.tipo||'Subitem',()=>monday.execute('openItemCard',{itemId:parseInt(sib.subId)}));if(isMe)itm.style.color='#7c83f5';dd.appendChild(itm);});}
+              const itm=mkFlyoutItem(isMe?'▶':'↳',sib.tipo||'Subitem','Abrir Subitem',
+                ()=>monday.execute('openItemCard',{itemId:parseInt(sib.subId)}),
+                ()=>monday.execute('openItemCard',{itemId:parseInt(sib.subId),kind:'updates'})
+              );if(isMe)itm.style.color='#7c83f5';dd.appendChild(itm);});}
             const ddW=180;let lft=rect.right+4;if(lft+ddW>window.innerWidth)lft=rect.left-ddW-4;
             dd.style.cssText=`display:block;top:${rect.bottom+2}px;left:${Math.max(4,lft)}px`;});
 
