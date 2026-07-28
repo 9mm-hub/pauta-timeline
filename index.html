@@ -1239,9 +1239,19 @@ function initApp(monday) {
       let allItems = firstPage.items;
       allData = processItems(allItems);
 
+      // Acesso parcial por utilizador (configurado manualmente)
+      // Chave: ID Monday.com | Valor: nomes exactos das pessoas visíveis
+      const PARTIAL_ACCESS = {
+        "109716069": ["Pietra Ceretta", "Pire", "William Amaral"]
+      };
+
       if(!isAdmin) {
-        const resolvedName = currentUserName || userNameById[String(currentUserId)] || '';
-        selPersons = resolvedName ? [resolvedName] : [];
+        if(PARTIAL_ACCESS[String(currentUserId)]) {
+          selPersons = PARTIAL_ACCESS[String(currentUserId)];
+        } else {
+          const resolvedName = currentUserName || userNameById[String(currentUserId)] || '';
+          selPersons = resolvedName ? [resolvedName] : [];
+        }
       }
 
       populateFilter(); populateTipo(); populateSetor();
