@@ -499,6 +499,7 @@ function initApp(monday) {
           siblings: jobSubsMap[item.id] || [],
           cronColId:colIds['Cronograma']||null,
           hsdColId:colIds['HSD']||null,
+          respColId:colIds['Resp.']||colIds['Responsável']||colIds['Resp']||null,
           hsFallback, hsd,
           jobName:sub.name||jobName, clientCode, tipo, setor, status, range
         });
@@ -519,6 +520,25 @@ function initApp(monday) {
     } catch(err) {
       const msg = (err?.message||'').slice(0,80) || JSON.stringify(err).slice(0,80);
       console.error('Erro datas:', err);
+      showToast('Erro: ' + msg, true);
+    }
+  }
+
+  async function updateResp(sub, newPersonName) {
+    if(!sub.boardId||!sub.respColId){ showToast('Coluna Resp. não encontrada.',true); return; }
+    // Resolve o ID Monday do nome da pessoa
+    const uid = Object.keys(userNameById).find(id => userNameById[id] === newPersonName);
+    if(!uid){ showToast(`Utilizador "${newPersonName}" não encontrado.`,true); return; }
+    try {
+      const val = JSON.stringify({ personsAndTeams: [{ id: parseInt(uid), kind: 'person' }] });
+      const query = `mutation {
+        change_column_value(board_id: ${sub.boardId}, item_id: ${sub.subId}, column_id: "${sub.respColId}", value: ${JSON.stringify(val)}) { id }
+      }`;
+      await monday.api(query);
+      showToast(`✓ Responsável → ${newPersonName}`);
+    } catch(err) {
+      const msg = (err?.message||'').slice(0,80);
+      console.error('Erro resp:', err);
       showToast('Erro: ' + msg, true);
     }
   }
@@ -611,10 +631,17 @@ function initApp(monday) {
   setInterval(() => refreshData(true), 5 * 60 * 1000);
 
   let refreshTimer = null;
-  monday.listen('events', () => {
-    if(boardFilterKey) localStorage.removeItem(`board_cache_${boardFilterKey}`);
+  function scheduleRefresh(delay=1500) {
+    if(boardFilterKey) localStorage.removeItem(`col_schema_${currentBoardId}`);
     clearTimeout(refreshTimer);
-    refreshTimer = setTimeout(() => refreshData(true), 1500);
+    refreshTimer = setTimeout(() => refreshData(true), delay);
+  }
+  // Captura mudanças no board (edições inline, automações)
+  monday.listen('events', () => scheduleRefresh(1500));
+  // Captura quando o card popup fecha — garante refresh após editar pessoa no card
+  window.addEventListener('message', e => {
+    const t = e.data?.type || e.data?.method || '';
+    if(/close|item.*card|card.*close|itemChanged|column.*changed/i.test(t)) scheduleRefresh(800);
   });
 
   async function loadSubAdmins() {
@@ -888,7 +915,21 @@ function initApp(monday) {
             const ddW=180;let lft=rect.right+4;if(lft+ddW>window.innerWidth)lft=rect.left-ddW-4;
             dd.style.cssText=`display:block;top:${rect.bottom+2}px;left:${Math.max(4,lft)}px`;});
 
-          blk.addEventListener('click',e=>{if(e._dragged)return;monday.execute('openItemCard',{itemId:parseInt(sub.subId)});});
+          // 1 clique → abre card completo | 2 cliques → abre atualizações
+          let _clickTimer=null;
+          blk.addEventListener('click',e=>{
+            if(e._dragged)return;
+            if(_clickTimer){
+              clearTimeout(_clickTimer);
+              _clickTimer=null;
+              monday.execute('openItemCard',{itemId:parseInt(sub.subId),kind:'updates'});
+            } else {
+              _clickTimer=setTimeout(()=>{
+                _clickTimer=null;
+                monday.execute('openItemCard',{itemId:parseInt(sub.subId)});
+              },220);
+            }
+          });
 
           blk.addEventListener('mousedown',e=>{
             if(e.shiftKey){
@@ -903,8 +944,38 @@ function initApp(monday) {
             if(e.target.classList.contains('rs-right')||e.target.classList.contains('rs-left')||e.target.classList.contains('rs-bottom')||e.target.classList.contains('rs-top')||e.target.classList.contains('blk-menu-btn'))return;
             const startX=e.clientX,startY=e.clientY;let mode=null;
             const ghost=document.createElement('div');ghost.style.cssText='position:fixed;opacity:0.6;pointer-events:none;z-index:9999;border-radius:5px;background:'+cliColor(sub.clientCode)+';padding:4px 8px;font-size:10px;color:#fff;font-weight:600;white-space:nowrap;display:none';ghost.textContent=sub.jobName;document.body.appendChild(ghost);
-            function onMove(ev){const dx=ev.clientX-startX,dy=ev.clientY-startY;if(!mode&&(Math.abs(dx)>12||Math.abs(dy)>12))mode=Math.abs(dy)>Math.abs(dx)?'reorder':'move';if(mode==='reorder'){ev._dragged=true;ghost.style.display='block';ghost.style.left=(ev.clientX+10)+'px';ghost.style.top=(ev.clientY+10)+'px';blk.style.opacity='0.4';}else if(mode==='move'){const delta=Math.round(dx/DAY_W);const ns=new Date(sub.range.start.getTime()+delta*86400000);const ne=new Date(sub.range.end.getTime()+delta*86400000);blk._pendingStart=ns;blk._pendingEnd=ne;blk.style.opacity='0.7';ghost.style.display='block';ghost.style.left=(ev.clientX+10)+'px';ghost.style.top=(ev.clientY+10)+'px';ghost.textContent=`${ns.getDate()} ${MON_PT[ns.getMonth()]} → ${ne.getDate()} ${MON_PT[ne.getMonth()]}`;}}
-            function onUp(ev){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);ghost.remove();blk.style.opacity='1';if(mode==='reorder'){const allBlks=[...document.querySelectorAll('.blk')];const tgt=allBlks.find(b2=>{if(b2===blk)return false;const r=b2.getBoundingClientRect();return ev.clientY>=r.top&&ev.clientY<=r.bottom;});if(tgt&&tgt._subId){const arr=[...new Set([...sortedSubs.map(s=>s.subId)])];const fi=arr.indexOf(sub.subId),ti=arr.indexOf(tgt._subId);if(fi!==-1&&ti!==-1){arr.splice(fi,1);arr.splice(ti,0,sub.subId);}subOrder[p.person]=arr;localStorage.setItem(`subOrder_${boardFilterKey}`,JSON.stringify(subOrder));render();}}else if(mode==='move'&&blk._pendingStart){ev._dragged=true;pushUndo('range',sub,{start:new Date(sub.range.start),end:new Date(sub.range.end)});sub.range.start=blk._pendingStart;sub.range.end=blk._pendingEnd;updateRange(sub,blk._pendingStart,blk._pendingEnd);delete blk._pendingStart;delete blk._pendingEnd;render();}}
+            function onMove(ev){const dx=ev.clientX-startX,dy=ev.clientY-startY;if(!mode&&(Math.abs(dx)>12||Math.abs(dy)>12))mode=Math.abs(dy)>Math.abs(dx)?'reorder':'move';if(mode==='reorder'){ev._dragged=true;ghost.style.display='block';ghost.style.left=(ev.clientX+10)+'px';ghost.style.top=(ev.clientY+10)+'px';blk.style.opacity='0.4';
+                // Highlight da linha alvo e texto do ghost
+                const hoverRow=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('.prow');
+                const hoverPerson=hoverRow?.querySelector('.pname')?.dataset?.person;
+                document.querySelectorAll('.prow').forEach(r=>r.style.background='');
+                if(hoverPerson&&hoverPerson!==p.person){hoverRow.style.background='rgba(124,131,245,0.12)';ghost.textContent=`→ ${hoverPerson}`;}
+                else{ghost.textContent=sub.jobName;}
+              }else if(mode==='move'){const delta=Math.round(dx/DAY_W);const ns=new Date(sub.range.start.getTime()+delta*86400000);const ne=new Date(sub.range.end.getTime()+delta*86400000);blk._pendingStart=ns;blk._pendingEnd=ne;blk.style.opacity='0.7';ghost.style.display='block';ghost.style.left=(ev.clientX+10)+'px';ghost.style.top=(ev.clientY+10)+'px';ghost.textContent=`${ns.getDate()} ${MON_PT[ns.getMonth()]} → ${ne.getDate()} ${MON_PT[ne.getMonth()]}`;}}
+            function onUp(ev){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);ghost.remove();blk.style.opacity='1';document.querySelectorAll('.prow').forEach(r=>r.style.background='');
+              if(mode==='reorder'){
+                // Detecta se pousou em outra linha (prow) → muda responsável
+                const targetRow = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.prow');
+                const targetPerson = targetRow?.querySelector('.pname')?.dataset?.person;
+                if(targetPerson && targetPerson !== p.person) {
+                  // Drop em outra pessoa → muda Resp.
+                  const prevPerson = p.person;
+                  showDragTip(`→ ${targetPerson}`, ev.clientX, ev.clientY);
+                  setTimeout(hideDragTip, 1200);
+                  // Atualiza localmente
+                  const idx = allData.findIndex(d=>d.person===p.person);
+                  const tgtIdx = allData.findIndex(d=>d.person===targetPerson);
+                  if(idx>-1) allData[idx].subitems = allData[idx].subitems.filter(s=>s.subId!==sub.subId);
+                  if(tgtIdx>-1) { sub.person=targetPerson; allData[tgtIdx].subitems.push(sub); }
+                  render();
+                  updateResp(sub, targetPerson);
+                } else {
+                  // Drop na mesma linha → reordena
+                  const allBlks=[...document.querySelectorAll('.blk')];
+                  const tgt=allBlks.find(b2=>{if(b2===blk)return false;const r=b2.getBoundingClientRect();return ev.clientY>=r.top&&ev.clientY<=r.bottom;});
+                  if(tgt&&tgt._subId){const arr=[...new Set([...sortedSubs.map(s=>s.subId)])];const fi=arr.indexOf(sub.subId),ti=arr.indexOf(tgt._subId);if(fi!==-1&&ti!==-1){arr.splice(fi,1);arr.splice(ti,0,sub.subId);}subOrder[p.person]=arr;localStorage.setItem(`subOrder_${boardFilterKey}`,JSON.stringify(subOrder));render();}
+                }
+              } else if(mode==='move'&&blk._pendingStart){ev._dragged=true;pushUndo('range',sub,{start:new Date(sub.range.start),end:new Date(sub.range.end)});sub.range.start=blk._pendingStart;sub.range.end=blk._pendingEnd;updateRange(sub,blk._pendingStart,blk._pendingEnd);delete blk._pendingStart;delete blk._pendingEnd;render();}}
             document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
           });
           blk._subId=sub.subId;
