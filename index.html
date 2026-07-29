@@ -80,7 +80,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 .pdcell.holiday-col{background:#1a0a0a}
 .blk{position:absolute;border-radius:5px;cursor:pointer;display:flex;flex-direction:column;justify-content:flex-start;align-items:stretch;padding:4px 6px 3px 6px;transition:filter .1s;overflow:hidden;z-index:2}
 .blk:hover{filter:brightness(1.15);z-index:5}
-.blk.over{} /* sobrecarregado sinalizado só pela faixa vermelha no dia */
+.blk.over{}
 .blk-job{font-weight:600;font-size:10px;line-height:1.3;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
 .blk-tp{font-size:9px;color:rgba(255,255,255,0.75);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
 .blk-st{font-size:9px;color:rgba(255,255,255,0.6);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;text-align:left}
@@ -231,7 +231,6 @@ function initApp(monday) {
   const ADMIN_USER_ID = null;
   const DAYS_PT = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
   const MON_PT = ['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
-  // Paleta de 48 cores distintas via ângulo dourado — sem repetição visual
   const PALETTE = (function(){
     const out=[];
     for(let i=0;i<48;i++){
@@ -243,7 +242,6 @@ function initApp(monday) {
     return out;
   })();
 
-  // ── Constantes de layout ──────────────────────────────────
   const NAME_W     = 150;
   const PX_PER_HS  = 18;
   const GAP        = 8;
@@ -252,18 +250,16 @@ function initApp(monday) {
   const TOTAL_DAYS   = (WEEKS_BEFORE + WEEKS_AFTER) * 7;
   const PAD = 9;
 
-  // DAY_W dinâmico: 7 dias úteis visíveis no viewport
   const DAY_W = Math.max(70, Math.floor((window.innerWidth - NAME_W) / 7));
   const WEEK_PX = DAY_W * 7;
 
   let allData = [], personOrder = [], isAdmin = false, isMainAdmin = false;
-  let subAdmins = []; // IDs com acesso alargado (carregado do Monday Storage)
+  let subAdmins = [];
   let selPersons = [];
   let searchQuery = '';
   let selTipo  = '';
   let selSetor = '';
   let sortMode = 'custom';
-  // ceId na URL é único por vista (Board View tab) — ideal como chave
   const _urlParams = new URLSearchParams(window.location.search);
   const _ceId = _urlParams.get('ceId') || '';
   let boardFilterKey = _ceId || '9mm';
@@ -279,8 +275,6 @@ function initApp(monday) {
   let holidays  = JSON.parse(localStorage.getItem('holidays_9mm') || '[]');
   let defaultHs = parseInt(localStorage.getItem('default_hs_9mm') || '8');
 
-  // Extrai o código base do job (COD_NUM_ANO sem a letra final)
-  // Aceita hífens ou underscores: ACC-0005-26F ou ACC_0005_26A → "ACC_0005_26"
   function jobPrefix(name) {
     const n = (name||'').replace(/[-_]/g, '_').toUpperCase();
     const m = n.match(/^([A-Z]{2,5}_\d{2,6}_\d{2})/);
@@ -295,7 +289,6 @@ function initApp(monday) {
       .map(([id, name]) => ({ id, name }));
   }
 
-  // Cores determinísticas por código de cliente — hash garante sempre a mesma cor
   const cliColors = {};
   function hashStr(s) {
     let h = 2166136261;
@@ -311,21 +304,18 @@ function initApp(monday) {
   function avColor(n) { if(!avMap[n]){ avMap[n]=avColors[ai%avColors.length]; ai++; } return avMap[n]; }
   function initials(n) { return (n||'?').split(' ').map(p=>p[0]).join('').slice(0,2).toUpperCase(); }
 
-  // ── Toast ─────────────────────────────────────────────────
   function showToast(msg, isError) {
     const t = document.getElementById('toast');
     t.textContent = msg; t.className = isError ? 'show error' : 'show';
     setTimeout(() => { t.className=''; }, 3000);
   }
 
-  // ── Datas utilitárias ─────────────────────────────────────
   function fmtD(d) { return d.toISOString().split('T')[0]; }
   function isToday(d) { return fmtD(d) === fmtD(new Date()); }
   function isWknd(d)  { return d.getDay()===0 || d.getDay()===6; }
   function isHoliday(d) { return holidays.includes(fmtD(d)); }
   function isBlocked(d) { return isWknd(d) || isHoliday(d); }
 
-  // Segunda-feira da semana atual
   function thisMonday() {
     const t = new Date(); const dw = t.getDay();
     const m = new Date(t);
@@ -334,7 +324,6 @@ function initApp(monday) {
     return m;
   }
 
-  // Gera todos os dias renderizados (WEEKS_BEFORE semanas atrás → WEEKS_AFTER à frente)
   function getAllDays() {
     const mon = thisMonday();
     const start = new Date(mon);
@@ -344,19 +333,15 @@ function initApp(monday) {
     });
   }
 
-  // Índice do "hoje" dentro do array de dias
   function todayIndex(days) {
     const td = fmtD(new Date());
     return days.findIndex(d => fmtD(d)===td);
   }
 
-  // Posição X do scroll para mostrar a semana do dia de índice idx
   function scrollXForIndex(idx) {
-    return Math.max(0, idx * DAY_W - 50); // um pouco antes do dia
+    return Math.max(0, idx * DAY_W - 50);
   }
 
-  // ── Navegação ─────────────────────────────────────────────
-  // Ao invés de re-renderizar, só muda o scroll
   function scrollByWeeks(n) {
     const wrap = document.getElementById('tl-wrap');
     wrap.scrollBy({ left: n * WEEK_PX, behavior: 'smooth' });
@@ -372,7 +357,6 @@ function initApp(monday) {
   }
 
   function updateWeekLabel(days) {
-    // Mostra o intervalo de dias visíveis baseado no scroll
     const wrap = document.getElementById('tl-wrap');
     const scrollLeft = wrap.scrollLeft;
     const viewW = wrap.clientWidth - NAME_W;
@@ -385,20 +369,16 @@ function initApp(monday) {
     }
   }
 
-  // ── Fetch ─────────────────────────────────────────────────
-  // Cache do schema de colunas de subitems (1 hora)
   let _colSchemaCache = null;
   let _colSchemaBoardId = null;
 
   async function fetchColumnSchema(bId) {
     const cacheKey = `col_schema_${bId}`;
     if(_colSchemaCache && _colSchemaBoardId===bId) return _colSchemaCache;
-    // Tenta cache localStorage (1h)
     try {
       const raw = localStorage.getItem(cacheKey);
       if(raw){ const {ts,data}=JSON.parse(raw); if(Date.now()-ts<3600000){ _colSchemaCache=data; _colSchemaBoardId=bId; return data; } }
     } catch(e){}
-    // Busca schema: só items_page com 1 item para obter estrutura das colunas
     const q=`query { boards(ids:[${bId}]){ items_page(limit:1){ items{ subitems{ board{ id columns{ id title type } } } } } } }`;
     const res=await monday.api(q);
     const items=res.data.boards[0].items_page.items;
@@ -411,12 +391,10 @@ function initApp(monday) {
   }
 
   async function fetchData(bId) {
-    // Query 1: schema de colunas (cacheado)
     const colSchema = await fetchColumnSchema(bId);
     const colTitleMap={}, colTypeMap={};
     colSchema.forEach(c=>{ colTitleMap[c.id]=c.title; colTypeMap[c.id]=c.type; });
 
-    // Query 2: items + subitems SEM board/columns aninhados (muito menos complexidade)
     let allItems=[], cursor=null;
     do {
       const cursorPart=cursor?`, cursor:"${cursor}"`:'';
@@ -443,7 +421,6 @@ function initApp(monday) {
         }catch(e){ if(attempt===2)throw e; await new Promise(r=>setTimeout(r,5000)); }
       }
       const page=res.data.boards[0].items_page;
-      // Injeta o schema nas subitems para que processItems funcione normalmente
       page.items.forEach(item=>{
         item.subitems.forEach(sub=>{
           sub.board={ id: bId, columns: colSchema };
@@ -456,7 +433,6 @@ function initApp(monday) {
     return allItems;
   }
 
-  // ── Parse de datas ────────────────────────────────────────
   function parseRange(str) {
     if(!str) return null;
     str = str.trim();
@@ -477,11 +453,10 @@ function initApp(monday) {
     return d?{start:d,end:d}:null;
   }
 
-  // ── Processa itens ────────────────────────────────────────
+  // ── FIX: jobSubsMap agora lê 'Função' com fallback para 'Tipo' ──────────
   function processItems(items) {
     const personMap = {};
 
-    // Pré-monta mapa de job → subitens resumidos (para o menu de contexto)
     const jobSubsMap = {};
     items.forEach(item => {
       jobSubsMap[item.id] = (item.subitems || []).map(sub => {
@@ -489,9 +464,11 @@ function initApp(monday) {
         if(sub.board && sub.board.columns) sub.board.columns.forEach(c => ctm[c.id]=c.title);
         const cols = {};
         sub.column_values.forEach(c => { cols[ctm[c.id]||c.id] = c.text; });
-        return { subId: sub.id, tipo: cols['Tipo']||sub.name||'Subitem' };
+        // FIX: lê 'Função' primeiro, fallback para 'Tipo', depois sub.name
+        return { subId: sub.id, tipo: cols['Função']||cols['Tipo']||sub.name||'Subitem' };
       });
     });
+
     items.forEach(item => {
       const jobName = item.name || '';
       const clientCode = jobName.slice(0,3).toUpperCase();
@@ -503,13 +480,12 @@ function initApp(monday) {
         sub.column_values.forEach(c=>{ const t=colTitleMap[c.id]||c.id; cols[t]=c.text; colIds[t]=c.id; });
         const resp = cols['Resp.']||cols['Responsável']||cols['Resp']||'';
         const cronograma = cols['Cronograma']||'';
-        const tipo = cols['Tipo']||'';
+        // FIX: lê 'Função' primeiro, fallback para 'Tipo'
+        const tipo = cols['Função']||cols['Tipo']||'';
         const status = cols['Status']||'';
         const setor = cols['Setor']||'';
-        // HSD: "8 0 0 8 8" — um valor por dia útil, espaço como separador
         const hsdText = (cols['HSD']||'').trim();
         const hsd = hsdText ? hsdText.split(/\s+/).map(Number).filter(n=>!isNaN(n)) : null;
-        // Fallback: HS simples para jobs antigos sem HSD
         const hsText = (cols['HS']||'').trim();
         const hsRaw = parseInt(hsText);
         const hsFallback = (!hsText||isNaN(hsRaw)) ? defaultHs : hsRaw;
@@ -531,7 +507,6 @@ function initApp(monday) {
     return Object.values(personMap);
   }
 
-  // ── Update Monday ─────────────────────────────────────────
   async function updateRange(sub, newStart, newEnd) {
     if(!sub.boardId||!sub.cronColId){ showToast('Coluna Cronograma não encontrada.',true); return; }
     try {
@@ -577,8 +552,7 @@ function initApp(monday) {
     } catch(e) { console.warn('Erro ao buscar users:', e); }
   }
 
-  let subOrder = {}; // carregado por board no context listener
-  // subOrder[person] = [subId, subId, ...] — ordem customizada dos subitems
+  let subOrder = {};
   const undoStack = [];
   const MAX_UNDO = 30;
 
@@ -587,7 +561,6 @@ function initApp(monday) {
     if(undoStack.length > MAX_UNDO) undoStack.shift();
   }
 
-  // Ctrl+Z — desfaz a última ação
   document.addEventListener('keydown', async e => {
     if(!(e.ctrlKey || e.metaKey) || e.key !== 'z') return;
     e.preventDefault();
@@ -614,7 +587,7 @@ function initApp(monday) {
 
   async function refreshData(silent = false) {
     if(!currentBoardId) return;
-    if(!silent) localStorage.removeItem(`board_cache_${boardFilterKey}`); // força dados frescos
+    if(!silent) localStorage.removeItem(`board_cache_${boardFilterKey}`);
     const btn = document.getElementById('btn-refresh');
     if(btn) btn.classList.add('spinning');
     if(!silent) showToast('Atualizando dados...');
@@ -635,13 +608,10 @@ function initApp(monday) {
     }
   }
 
-  // Auto-refresh a cada 2 minutos
   setInterval(() => refreshData(true), 5 * 60 * 1000);
 
-  // Atualiza automaticamente quando algo muda no board
   let refreshTimer = null;
   monday.listen('events', () => {
-    // Invalida o cache imediatamente quando há mudanças
     if(boardFilterKey) localStorage.removeItem(`board_cache_${boardFilterKey}`);
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => refreshData(true), 1500);
@@ -662,7 +632,6 @@ function initApp(monday) {
   function openAccessPanel() {
     const list = document.getElementById('access-list');
     list.innerHTML = '';
-    // Lista todos os utilizadores do board
     const names = [...new Set(allData.map(p=>p.person))].sort((a,b)=>a.localeCompare(b));
     names.forEach(name => {
       const uid = Object.keys(userNameById).find(id => userNameById[id] === name) || '';
@@ -689,7 +658,6 @@ function initApp(monday) {
   });
   document.getElementById('baccess').addEventListener('click', openAccessPanel);
 
-  // Tooltip de feedback drag
   const dragTip = document.getElementById('drag-tip');
   function showDragTip(text, x, y) {
     dragTip.textContent = text;
@@ -699,17 +667,12 @@ function initApp(monday) {
   }
   function hideDragTip() { dragTip.style.display = 'none'; }
 
-  // ── Render ────────────────────────────────────────────────
   function render() {
     const days = getAllDays();
 
-    // ── Altura global uniforme ────────────────────────────────
-    // Calcula o maior empilhamento de HS num mesmo dia (em qualquer pessoa)
-    // para que TODAS as linhas tenham exatamente a mesma altura.
     const NORMAL_HS = 8;
     const NORMAL_H  = NORMAL_HS * PX_PER_HS;
 
-    // ROW_H dinâmico: cresce conforme o máximo empilhado no dia
     let globalMaxHs = NORMAL_HS;
     const _visData = selPersons.length>0 ? allData.filter(p=>selPersons.includes(p.person)) : allData;
     _visData.forEach(p=>{
@@ -725,7 +688,6 @@ function initApp(monday) {
     });
     const ROW_H = PAD*2 + globalMaxHs*PX_PER_HS;
 
-    // Cabeçalho de dias agrupado por semana
     const dhi = document.getElementById('days-header-inner');
     dhi.innerHTML = '';
     for(let w=0; w<TOTAL_DAYS/7; w++) {
@@ -747,9 +709,7 @@ function initApp(monday) {
     }
 
     let data = allData;
-    // Filtro pessoa (multi)
     if(selPersons.length > 0) data = data.filter(p => selPersons.includes(p.person));
-    // Filtro search + tipo (sem modificar allData)
     if(searchQuery || selTipo || selSetor) {
       data = data.map(p => ({
         ...p,
@@ -764,7 +724,6 @@ function initApp(monday) {
     data = [...data].sort((a,b)=>{
       if(sortMode === 'az') return a.person.localeCompare(b.person);
       if(sortMode === 'za') return b.person.localeCompare(a.person);
-      // custom — mantém a ordem do drag
       const ia=personOrder.indexOf(a.person), ib=personOrder.indexOf(b.person);
       if(ia===-1&&ib===-1) return 0; if(ia===-1) return 1; if(ib===-1) return -1; return ia-ib;
     });
@@ -775,7 +734,6 @@ function initApp(monday) {
       const row = document.createElement('div');
       row.className='prow'; row.style.minHeight=ROW_H+'px';
 
-      // Nome (sticky esquerda)
       const nc = document.createElement('div'); nc.className='pname';
       nc.style.width=NAME_W+'px'; nc.draggable=true; nc.dataset.person=p.person;
       const av = document.createElement('div'); av.className='av';
@@ -790,7 +748,6 @@ function initApp(monday) {
       const ns = document.createElement('div'); ns.className='pname-text'; ns.textContent=p.person;
       nc.appendChild(av); nc.appendChild(ns); row.appendChild(nc);
 
-      // Drag para reordenar linhas
       nc.addEventListener('dragstart', e=>{ e.dataTransfer.setData('text/plain',p.person); nc.style.opacity='0.4'; });
       nc.addEventListener('dragend', ()=>{ nc.style.opacity='1'; });
       nc.addEventListener('dragover', e=>{ e.preventDefault(); nc.style.background='#2e3150'; });
@@ -807,7 +764,6 @@ function initApp(monday) {
         render();
       });
 
-      // Células de dias
       const pdays = document.createElement('div'); pdays.className='pdays';
       pdays.style.cssText=`width:${TOTAL_DAYS*DAY_W}px;position:relative;overflow:hidden;`;
       days.forEach(d=>{
@@ -818,14 +774,12 @@ function initApp(monday) {
       });
       row.appendChild(pdays); rows.appendChild(row);
 
-      // Ordena subitems por ordem customizada
       const ord = subOrder[p.person] || [];
       const sortedSubs = [...p.subitems].sort((a,b)=>{
         const ia=ord.indexOf(a.subId), ib=ord.indexOf(b.subId);
         if(ia===-1&&ib===-1) return 0; if(ia===-1) return 1; if(ib===-1) return -1; return ia-ib;
       });
 
-      // Blocos com HSD: array de horas por dia útil
       const blocks=[];
       sortedSubs.forEach(sub=>{
         const workDays=[];
@@ -853,7 +807,6 @@ function initApp(monday) {
             blocks.push({sub,colStart:segStart,colEnd:Math.min(workDays[k-1].dayIndex,TOTAL_DAYS-1),dayHs:segHs,wpStart:segWpStart,wpEnd:workPos-1});
             segStart=dayIndex; segHs=curHs; segWpStart=workPos;
           }
-          // Mesmo sub, consecutivo, HS diferente → novo bloco mas sem gap visual
           else if(curHs!==segHs){
             blocks.push({sub,colStart:segStart,colEnd:Math.min(workDays[k-1].dayIndex,TOTAL_DAYS-1),dayHs:segHs,wpStart:segWpStart,wpEnd:workPos-1,noGapRight:true});
             segStart=dayIndex; segHs=curHs; segWpStart=workPos;
@@ -862,16 +815,11 @@ function initApp(monday) {
         if(segStart!==-1) blocks.push({sub,colStart:segStart,colEnd:Math.min(workDays[workDays.length-1].dayIndex, TOTAL_DAYS-1),dayHs:segHs,wpStart:segWpStart,wpEnd:workDays[workDays.length-1].workPos});
       });
 
-      // Post-processamento: marca noGapLeft nos blocos que seguem um noGapRight do mesmo sub
       for(let k=1;k<blocks.length;k++){
         if(blocks[k-1].noGapRight && blocks[k-1].sub.subId===blocks[k].sub.subId)
           blocks[k].noGapLeft=true;
       }
 
-      // ── Rendering por dia independente ──────────────────────
-      // Cada dia empilha os seus próprios blocos do topo independentemente
-
-      // Índice dia → blocos (sem duplicar o mesmo sub no mesmo dia)
       const dayMap = {};
       blocks.forEach(b => {
         for(let di=b.colStart; di<=b.colEnd; di++){
@@ -880,7 +828,6 @@ function initApp(monday) {
         }
       });
 
-      // ROW_H: baseado no dia mais cheio
       let maxDayHs = NORMAL_HS;
       Object.values(dayMap).forEach(dList => {
         const s=dList.reduce((a,b)=>a+(b.dayHs??b.sub.hsFallback),0);
@@ -888,7 +835,6 @@ function initApp(monday) {
       });
       row.style.minHeight=(PAD*2+maxDayHs*PX_PER_HS)+'px';
 
-      // Renderiza cada dia de forma independente
       Object.entries(dayMap).forEach(([diStr,dayBList])=>{
         const di=parseInt(diStr);
         const totalDayHs=dayBList.reduce((a,b)=>a+(b.dayHs??b.sub.hsFallback),0);
@@ -923,7 +869,6 @@ function initApp(monday) {
           const showSub=blkH>=26;
           blk.innerHTML=`<div class="blk-job">${sub.jobName}</div>`+(showSub&&sub.status?`<div class="blk-tp">${sub.status} · HS ${thisHs}</div>`:'');
 
-          // X por dia (admin)
           if(isAdmin){
             const wp=(wpStart??0)+(di-colStart);
             const nonZero=(sub.hsd||[]).filter(v=>v>0).length||1;
@@ -933,7 +878,6 @@ function initApp(monday) {
             blk.appendChild(xBtn);
           }
 
-          // Menu ⋮
           const menuBtn=document.createElement('button');menuBtn.className='blk-menu-btn';menuBtn.textContent='⋮';blk.appendChild(menuBtn);
           menuBtn.addEventListener('click',e=>{e.stopPropagation();const dd=document.getElementById('blk-dd');const rect=menuBtn.getBoundingClientRect();dd.innerHTML='';
             const mkLabel=t=>{const d=document.createElement('div');d.className='dd-label';d.textContent=t;return d;};
@@ -946,7 +890,6 @@ function initApp(monday) {
 
           blk.addEventListener('click',e=>{if(e._dragged)return;monday.execute('openItemCard',{itemId:parseInt(sub.subId)});});
 
-          // Drag: reordenar ou mover datas
           blk.addEventListener('mousedown',e=>{
             if(e.shiftKey){
               e.stopPropagation();e.preventDefault();
@@ -966,7 +909,6 @@ function initApp(monday) {
           });
           blk._subId=sub.subId;
 
-          // Handles resize
           const rsR=document.createElement('div');rsR.className='rs-right';blk.appendChild(rsR);
           rsR.addEventListener('mousedown',e=>{e.stopPropagation();e.preventDefault();const startX=e.clientX;const origDays=Math.round((sub.range.end-sub.range.start)/86400000);showDragTip(`→ ${sub.range.end.getDate()} ${MON_PT[sub.range.end.getMonth()]}`,e.clientX,e.clientY);function onMove(ev){const delta=Math.round((ev.clientX-startX)/DAY_W);const pending=new Date(sub.range.start.getTime()+Math.max(0,origDays+delta)*86400000);blk._pendingEnd=pending;showDragTip(`→ ${pending.getDate()} ${MON_PT[pending.getMonth()]}`,ev.clientX,ev.clientY);}function onUp(){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);hideDragTip();if(blk._pendingEnd){pushUndo('range',sub,{start:new Date(sub.range.start),end:new Date(sub.range.end)});sub.range.end=blk._pendingEnd;updateRange(sub,sub.range.start,blk._pendingEnd);delete blk._pendingEnd;render();}}document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);});
 
@@ -984,7 +926,6 @@ function initApp(monday) {
       });
     });
 
-        // Scroll label inicial
     updateWeekLabel(days);
   }
 
@@ -992,7 +933,6 @@ function initApp(monday) {
     const dd = document.getElementById('fperson-dd');
     const names = [...new Set(allData.map(p=>p.person))].sort((a,b)=>a.localeCompare(b));
     dd.innerHTML = '';
-    // "Todas" option
     const allLbl = document.createElement('label'); allLbl.className='fperson-all';
     const allCk = document.createElement('input'); allCk.type='checkbox'; allCk.id='fperson-all';
     allCk.checked = selPersons.length === 0;
@@ -1028,7 +968,6 @@ function initApp(monday) {
       : selPersons.length === 1 ? selPersons[0] : `${selPersons.length} pessoas`;
   }
 
-
   function populateTipo() {
     const sel=document.getElementById('ftipo'); const cur=sel.value;
     const tipos=[...new Set(allData.flatMap(p=>p.subitems.map(s=>s.tipo)).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
@@ -1060,25 +999,20 @@ function initApp(monday) {
     });
   }
 
-  // ── Dropdown global ───────────────────────────────────────
   function closeDD() { document.getElementById('blk-dd').style.display='none'; }
   document.addEventListener('click', e => {
     const dd = document.getElementById('blk-dd');
     if(dd && dd.style.display==='block' && !dd.contains(e.target)) closeDD();
   });
 
-  // ── Eventos de scroll ─────────────────────────────────────
   const wrap = document.getElementById('tl-wrap');
 
-  // Shift+Scroll → scroll horizontal
   wrap.addEventListener('wheel', e=>{
     if(e.shiftKey){ e.preventDefault(); wrap.scrollLeft+=e.deltaY; }
   }, {passive:false});
 
-  // Scroll label dinâmico
   wrap.addEventListener('scroll', ()=>{ updateWeekLabel(getAllDays()); });
 
-  // ── Arrastar espaço vazio para pan ────────────────────────
   let isPanning=false, panStartX=0, panStartY=0, panScrollLeft=0, panScrollTop=0;
   wrap.addEventListener('mousedown', e=>{
     if(e.target!==wrap && !e.target.classList.contains('pdcell') && !e.target.classList.contains('pdays')) return;
@@ -1095,7 +1029,6 @@ function initApp(monday) {
     if(isPanning){ isPanning=false; wrap.style.cursor=''; wrap.style.userSelect=''; }
   });
 
-  // ── Eventos de UI ─────────────────────────────────────────
   document.getElementById('btn-refresh').addEventListener('click', () => refreshData(false));
   document.getElementById('bp').addEventListener('click', ()=>scrollByWeeks(-1));
   document.getElementById('bn').addEventListener('click', ()=>scrollByWeeks(1));
@@ -1109,7 +1042,6 @@ function initApp(monday) {
     render();
   });
 
-  // Multi-select pessoa — toggle dropdown
   const fpersonBtn = document.getElementById('fperson-btn');
   const fpersonDd  = document.getElementById('fperson-dd');
   fpersonBtn.addEventListener('click', e => { e.stopPropagation(); fpersonDd.classList.toggle('open'); });
@@ -1117,12 +1049,10 @@ function initApp(monday) {
   document.getElementById('ftipo').addEventListener('change', e=>{ selTipo=e.target.value; localStorage.setItem(`filter_tipo_${boardFilterKey}`, selTipo); render(); });
   document.getElementById('fsetor').addEventListener('change', e=>{ selSetor=e.target.value; localStorage.setItem(`filter_setor_${boardFilterKey}`, selSetor); render(); });
 
-  // Re-valida boardFilterKey sempre que o contexto muda (navegação entre painéis)
   monday.listen('context', res => {
     const bid = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
     if(bid && String(bid) !== boardFilterKey) {
       boardFilterKey = String(bid);
-      // Recarrega filtros para o novo painel
       if(isAdmin) {
         selPersons = JSON.parse(localStorage.getItem(`filter_persons_${boardFilterKey}`) || '[]');
         selTipo    = localStorage.getItem(`filter_tipo_${boardFilterKey}`)   || '';
@@ -1173,7 +1103,6 @@ function initApp(monday) {
   });
   document.getElementById('btn-close-w').addEventListener('click', ()=>{ document.getElementById('weights-panel').classList.remove('open'); });
 
-  // ── Init ──────────────────────────────────────────────────
   monday.listen('context', async res => {
     console.log('Full context:', JSON.stringify(res.data));
     const boardId = res.data.boardId || (res.data.boardIds && res.data.boardIds[0]);
@@ -1187,7 +1116,6 @@ function initApp(monday) {
     isMainAdmin = res.data.user?.isAdmin === true ||
                   (ADMIN_USER_ID && String(currentUserId) === String(ADMIN_USER_ID));
 
-    // Carrega sub-admins antes de decidir acesso
     await loadSubAdmins();
     const isSubAdmin = subAdmins.includes(String(currentUserId));
     isAdmin = isMainAdmin || isSubAdmin;
@@ -1195,26 +1123,22 @@ function initApp(monday) {
     if(isAdmin) document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');
     if(isMainAdmin) document.getElementById('baccess').style.display='inline-flex';
 
-    // Carrega filtros DEPOIS de saber se é admin
     if(isAdmin) {
       selPersons = JSON.parse(localStorage.getItem(`filter_persons_${boardFilterKey}`) || '[]');
       selTipo    = localStorage.getItem(`filter_tipo_${boardFilterKey}`)   || '';
       selSetor   = localStorage.getItem(`filter_setor_${boardFilterKey}`)  || '';
       sortMode   = localStorage.getItem(`filter_sort_${boardFilterKey}`)   || 'custom';
     }
-    // Ordem de pessoas e subitems — por board, por pessoa (localStorage individual)
     personOrder = JSON.parse(localStorage.getItem(`order_${boardFilterKey}`) || '[]');
     subOrder    = JSON.parse(localStorage.getItem(`subOrder_${boardFilterKey}`) || '{}');
 
     try {
-      // ── Cache de fotos (1h) ───────────────────────────────────
       const photoCache = localStorage.getItem('users_photo_cache_9mm');
       if(photoCache) {
         try { const {ts,data} = JSON.parse(photoCache); if(Date.now()-ts < 3600000) { Object.assign(userPhotoMap,data.photos); Object.assign(userNameById,data.names); } }
         catch(e){}
       }
 
-      // Corre fetchUsers em paralelo com dados
       const firstPagePromise = (async () => {
         const query = `query { boards(ids:[${boardId}]) { items_page(limit:200) { cursor items { id name subitems { id name board{id columns{id title type}} column_values{id text value} } } } } }`;
         const r = await monday.api(query);
@@ -1229,7 +1153,6 @@ function initApp(monday) {
         loadSubAdmins()
       ]);
 
-      // Actualiza isAdmin com sub-admins carregados
       const isSubAdmin2 = subAdmins.includes(String(currentUserId));
       if(isSubAdmin2 && !isAdmin) {
         isAdmin = true;
@@ -1239,8 +1162,6 @@ function initApp(monday) {
       let allItems = firstPage.items;
       allData = processItems(allItems);
 
-      // Acesso parcial por utilizador (configurado manualmente)
-      // Chave: ID Monday.com | Valor: nomes exactos das pessoas visíveis
       const PARTIAL_ACCESS = {
         "109716069": ["Pietra Ceretta", "Pire", "William Amaral"]
       };
@@ -1266,7 +1187,6 @@ function initApp(monday) {
       render();
       requestAnimationFrame(()=>{ const days=getAllDays(); const idx=todayIndex(days); if(idx>=0) wrap.scrollLeft=scrollXForIndex(idx); updateWeekLabel(days); });
 
-      // Carrega páginas seguintes em background
       let cursor = firstPage.cursor;
       while(cursor) {
         const r = await monday.api(`query { boards(ids:[${boardId}]) { items_page(limit:200,cursor:"${cursor}") { cursor items { id name subitems { id name board{id columns{id title type}} column_values{id text value} } } } } }`);
