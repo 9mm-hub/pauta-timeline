@@ -525,21 +525,48 @@ function initApp(monday) {
   }
 
   async function updateResp(sub, newPersonName) {
-    if(!sub.boardId||!sub.respColId){ showToast('Coluna Resp. não encontrada.',true); return; }
-    // Resolve o ID Monday do nome da pessoa
-    const uid = Object.keys(userNameById).find(id => userNameById[id] === newPersonName);
-    if(!uid){ showToast(`Utilizador "${newPersonName}" não encontrado.`,true); return; }
+    // Resolve respColId: tenta colIds guardado, depois _colSchemaCache pelo tipo, depois pelo título
+    let respColId = sub.respColId;
+    if(!respColId && _colSchemaCache && _colSchemaCache.length) {
+      const personCol = _colSchemaCache.find(c =>
+        c.type === 'multiple-person' ||
+        c.title === 'Resp.' || c.title === 'Responsável' || c.title === 'Resp'
+      );
+      if(personCol) respColId = personCol.id;
+    }
+    // Último recurso: busca schema fresco do board de subitems via item específico
+    if(!respColId) {
+      try {
+        const r2 = await monday.api('query { items(ids:[' + sub.subId + ']) { board { columns { id title type } } } }');
+        const cols2 = r2?.data?.items?.[0]?.board?.columns || [];
+        const pc = cols2.find(c => c.type === 'multiple-person' || /resp/i.test(c.title));
+        if(pc) respColId = pc.id;
+      } catch(e) {}
+    }
+    if(!respColId) { showToast('Coluna Resp. não encontrada.', true); return; }
+
+    // Resolve o ID Monday do nome da pessoa (exacto primeiro, depois parcial)
+    let uid = Object.keys(userNameById).find(id => userNameById[id] === newPersonName);
+    if(!uid) uid = Object.keys(userNameById).find(id =>
+      userNameById[id].toLowerCase().includes(newPersonName.toLowerCase()) ||
+      newPersonName.toLowerCase().includes(userNameById[id].toLowerCase())
+    );
+    // Se ainda não encontrou, tenta buscar users novamente
+    if(!uid) {
+      await fetchUsers();
+      uid = Object.keys(userNameById).find(id => userNameById[id] === newPersonName);
+    }
+    if(!uid) { showToast('Utilizador "' + newPersonName + '" não encontrado.', true); return; }
+
     try {
       const val = JSON.stringify({ personsAndTeams: [{ id: parseInt(uid), kind: 'person' }] });
-      const query = `mutation {
-        change_column_value(board_id: ${sub.boardId}, item_id: ${sub.subId}, column_id: "${sub.respColId}", value: ${JSON.stringify(val)}) { id }
-      }`;
-      await monday.api(query);
-      showToast(`✓ Responsável → ${newPersonName}`);
+      const query = 'mutation { change_column_value(board_id: ' + sub.boardId + ', item_id: ' + sub.subId + ', column_id: "' + respColId + '", value: ' + JSON.stringify(val) + ') { id } }';
+      const res = await monday.api(query);
+      if(res.errors) { showToast('Erro: ' + (res.errors[0]?.message||'').slice(0,60), true); return; }
+      sub.respColId = respColId;
+      showToast('✓ Responsável → ' + newPersonName);
     } catch(err) {
-      const msg = (err?.message||'').slice(0,80);
-      console.error('Erro resp:', err);
-      showToast('Erro: ' + msg, true);
+      showToast('Erro: ' + (err?.message||'').slice(0,80), true);
     }
   }
 
@@ -632,17 +659,46 @@ function initApp(monday) {
 
   let refreshTimer = null;
   function scheduleRefresh(delay=1500) {
-    if(boardFilterKey) localStorage.removeItem(`col_schema_${currentBoardId}`);
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => refreshData(true), delay);
   }
-  // Captura mudanças no board (edições inline, automações)
+  // Captura mudanças via SDK (automacoes, edicoes inline no board)
   monday.listen('events', () => scheduleRefresh(1500));
-  // Captura quando o card popup fecha — garante refresh após editar pessoa no card
-  window.addEventListener('message', e => {
-    const t = e.data?.type || e.data?.method || '';
-    if(/close|item.*card|card.*close|itemChanged|column.*changed/i.test(t)) scheduleRefresh(800);
-  });
+
+  // Poll apos abertura de card: verifica o subitem especifico 3s e 8s depois
+  // O SDK nao emite evento quando o card fecha, entao fazemos polling do subitem
+  let _cardPollTimers = [];
+  function pollAfterCardOpen(subId) {
+    _cardPollTimers.forEach(clearTimeout);
+    _cardPollTimers = [];
+    async function doCheck() {
+      if(!subId) return;
+      try {
+        const res = await monday.api('query { items(ids:['+subId+']) { column_values { id text } } }');
+        const cv = res && res.data && res.data.items && res.data.items[0] && res.data.items[0].column_values;
+        if(!cv) return;
+        const schema = _colSchemaCache || [];
+        const ctm = {}; schema.forEach(function(c){ ctm[c.id] = c.title; });
+        const newCols = {};
+        cv.forEach(function(c){ newCols[ctm[c.id]||c.id] = c.text; });
+        const newResp = newCols['Resp.']||newCols['Responsavel']||newCols['Resp']||'';
+        const newCron = newCols['Cronograma']||'';
+        const newHsd  = (newCols['HSD']||'').trim();
+        let changed = false;
+        allData.forEach(function(p){
+          const sub = p.subitems.find(function(s){ return String(s.subId) === String(subId); });
+          if(!sub) return;
+          const curCron = sub.range ? (fmtD(sub.range.start) + ' - ' + fmtD(sub.range.end)) : '';
+          const curHsd  = sub.hsd ? sub.hsd.join(' ') : '';
+          if(newResp !== p.person || newCron !== curCron || newHsd !== curHsd) changed = true;
+        });
+        if(changed) refreshData(true);
+      } catch(e) { /* silencioso */ }
+    }
+    // 3s e 8s apos abrir — cobre edicoes rapidas e lentas
+    _cardPollTimers.push(setTimeout(doCheck, 3000));
+    _cardPollTimers.push(setTimeout(doCheck, 8000));
+  }
 
   async function loadSubAdmins() {
     try {
@@ -922,11 +978,11 @@ function initApp(monday) {
             if(_clickTimer){
               clearTimeout(_clickTimer);
               _clickTimer=null;
-              monday.execute('openItemCard',{itemId:parseInt(sub.subId),kind:'updates'});
+              monday.execute('openItemCard',{itemId:parseInt(sub.subId),kind:'updates'}); pollAfterCardOpen(sub.subId);
             } else {
               _clickTimer=setTimeout(()=>{
                 _clickTimer=null;
-                monday.execute('openItemCard',{itemId:parseInt(sub.subId)});
+                monday.execute('openItemCard',{itemId:parseInt(sub.subId)}); pollAfterCardOpen(sub.subId);
               },220);
             }
           });
