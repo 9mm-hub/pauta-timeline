@@ -38,15 +38,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #bcfg,#bpesos{background:#1a1a1a;border:1px solid #333;color:#ccc;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:12px}
 #bcfg:hover,#bpesos:hover{background:#2a2a2a}
 
-/* ── LAYOUT PRINCIPAL ──────────────────────────────────────────────────── */
-/* tl-outer é flex column: header em cima, scroll area embaixo            */
+/* Timeline wrapper — scrolls horizontally */
 #tl-outer{flex:1;display:flex;flex-direction:column;overflow:hidden;min-height:0}
-
-/* Header de dias — fora do scroll vertical, sempre visível */
-#tl-header-row{flex-shrink:0;overflow:hidden;background:#000;border-bottom:1px solid #333;position:relative;z-index:20}
-#tl-header-inner{display:flex;overflow:hidden}/* overflow hidden — scroll é sincronizado via JS */
-
-/* Scroll area — só conteúdo (linhas de pessoas) */
 #tl-wrap{flex:1;overflow-x:scroll;overflow-y:auto;user-select:none}
 #tl-wrap::-webkit-scrollbar{height:10px;width:10px}
 #tl-wrap::-webkit-scrollbar-track{background:#1a1a1a;border-radius:5px}
@@ -54,11 +47,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
 #tl-wrap::-webkit-scrollbar-thumb:hover{background:#888}
 #tl-wrap::-webkit-scrollbar-corner{background:#1a1a1a}
 #tl-scroll{display:inline-flex;flex-direction:column;min-height:100%}
-/* ─────────────────────────────────────────────────────────────────────── */
 
 .name-col{width:150px;flex-shrink:0}
-.days-header{display:flex;background:#000}
-.days-header .name-col{border-right:1px solid #333;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:4px 6px 3px;gap:3px}
+.days-header{display:flex;position:sticky;top:0;z-index:10;background:#000;border-bottom:1px solid #333}
+.days-header .name-col{border-right:1px solid #333;background:#000;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:4px 6px 3px;gap:3px;position:sticky;left:0;z-index:11}
 /* Sort controls */
 #sort-controls{display:flex;gap:3px;flex-wrap:wrap;justify-content:center}
 .sort-btn{background:#1a1a1a;border:1px solid #333;color:#888;padding:2px 6px;border-radius:4px;cursor:pointer;font-size:9px;white-space:nowrap}
@@ -169,12 +161,9 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
     <button id="baccess" class="main-admin-only" style="display:none">&#128275; Acesso</button>
   </div>
   <div id="loading"><div class="spinner"></div><span>Carregando...</span></div>
-
-  <!-- NOVO LAYOUT: header separado do scroll -->
   <div id="tl-outer" style="display:none">
-    <!-- Header de dias — fixo, fora do scroll vertical -->
-    <div id="tl-header-row">
-      <div id="tl-header-inner">
+    <div id="tl-wrap">
+      <div id="tl-scroll">
         <div class="days-header" id="days-header">
           <div class="name-col">
             <div id="sort-controls">
@@ -185,11 +174,6 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;backgrou
           </div>
           <div id="days-header-inner" class="days-header-inner"></div>
         </div>
-      </div>
-    </div>
-    <!-- Scroll area — só as linhas de pessoas -->
-    <div id="tl-wrap">
-      <div id="tl-scroll">
         <div id="rows"></div>
       </div>
     </div>
@@ -406,59 +390,47 @@ function initApp(monday) {
     return _colSchemaCache;
   }
 
-  async function apiWithRetry(query) {
-    for(let attempt=0; attempt<3; attempt++) {
-      try {
-        const res = await monday.api(query);
-        if(res.errors) {
-          const ce = res.errors.find(e=>e.extensions?.code==='COMPLEXITY_BUDGET_EXHAUSTED');
-          if(ce) {
-            const wait = (ce.extensions?.retry_in_seconds||30)*1000;
-            console.warn('Complexity, aguardando '+wait/1000+'s');
-            await new Promise(r=>setTimeout(r,wait));
-            continue;
-          }
-        }
-        return res;
-      } catch(e) {
-        if(attempt===2) throw e;
-        await new Promise(r=>setTimeout(r,8000));
-      }
-    }
-  }
-
   async function fetchData(bId) {
     const colSchema = await fetchColumnSchema(bId);
+    const colTitleMap={}, colTypeMap={};
+    colSchema.forEach(c=>{ colTitleMap[c.id]=c.title; colTypeMap[c.id]=c.type; });
 
-    // PASSO 1: busca so id+name dos itens (query leve)
-    let itemStubs=[], cursor=null;
+    let allItems=[], cursor=null;
     do {
-      const cursorPart = cursor ? ', cursor:"'+cursor+'"' : '';
-      const res = await apiWithRetry('query { boards(ids:['+bId+']) { items_page(limit:50'+cursorPart+') { cursor items { id name } } } }');
-      const page = res.data.boards[0].items_page;
-      itemStubs = itemStubs.concat(page.items);
-      cursor = page.cursor || null;
-      if(cursor) await new Promise(r=>setTimeout(r,500));
-    } while(cursor);
-
-    // PASSO 2: busca subitems em batches de 20 itens
-    const BATCH = 20;
-    const itemMap = {};
-    itemStubs.forEach(i => { itemMap[i.id] = { id:i.id, name:i.name, subitems:[] }; });
-
-    for(let i=0; i<itemStubs.length; i+=BATCH) {
-      const ids = itemStubs.slice(i, i+BATCH).map(x=>x.id).join(',');
-      const res = await apiWithRetry('query { items(ids:['+ids+']) { id subitems { id name column_values { id text } } } }');
-      (res.data.items||[]).forEach(item => {
-        if(itemMap[item.id]) {
-          item.subitems.forEach(sub => { sub.board = { id: bId, columns: colSchema }; });
-          itemMap[item.id].subitems = item.subitems;
+      const cursorPart=cursor?`, cursor:"${cursor}"`:'';
+      const query=`query {
+        boards(ids:[${bId}]) {
+          items_page(limit:100${cursorPart}) {
+            cursor
+            items {
+              id name
+              subitems { id name column_values { id text } }
+            }
+          }
         }
+      }`;
+      let res;
+      for(let attempt=0;attempt<3;attempt++){
+        try{
+          res=await monday.api(query);
+          if(res.errors){
+            const ce=res.errors.find(e=>e.extensions?.code==='COMPLEXITY_BUDGET_EXHAUSTED');
+            if(ce){ const wait=(ce.extensions?.retry_in_seconds||30)*1000; console.warn(`Complexity, aguardando ${wait/1000}s`); await new Promise(r=>setTimeout(r,wait)); continue; }
+          }
+          break;
+        }catch(e){ if(attempt===2)throw e; await new Promise(r=>setTimeout(r,5000)); }
+      }
+      const page=res.data.boards[0].items_page;
+      page.items.forEach(item=>{
+        item.subitems.forEach(sub=>{
+          sub.board={ id: bId, columns: colSchema };
+        });
       });
-      if(i+BATCH < itemStubs.length) await new Promise(r=>setTimeout(r,600));
-    }
-
-    return Object.values(itemMap);
+      allItems=allItems.concat(page.items);
+      cursor=page.cursor||null;
+      if(cursor) await new Promise(r=>setTimeout(r,300));
+    } while(cursor);
+    return allItems;
   }
 
   function parseRange(str) {
@@ -481,6 +453,7 @@ function initApp(monday) {
     return d?{start:d,end:d}:null;
   }
 
+  // ── FIX: jobSubsMap agora lê 'Função' com fallback para 'Tipo' ──────────
   function processItems(items) {
     const personMap = {};
 
@@ -491,6 +464,7 @@ function initApp(monday) {
         if(sub.board && sub.board.columns) sub.board.columns.forEach(c => ctm[c.id]=c.title);
         const cols = {};
         sub.column_values.forEach(c => { cols[ctm[c.id]||c.id] = c.text; });
+        // FIX: lê 'Função' primeiro, fallback para 'Tipo', depois sub.name
         return { subId: sub.id, tipo: cols['Função']||cols['Tipo']||sub.name||'Subitem' };
       });
     });
@@ -506,6 +480,7 @@ function initApp(monday) {
         sub.column_values.forEach(c=>{ const t=colTitleMap[c.id]||c.id; cols[t]=c.text; colIds[t]=c.id; });
         const resp = cols['Resp.']||cols['Responsável']||cols['Resp']||'';
         const cronograma = cols['Cronograma']||'';
+        // FIX: lê 'Função' primeiro, fallback para 'Tipo'
         const tipo = cols['Função']||cols['Tipo']||'';
         const status = cols['Status']||'';
         const setor = cols['Setor']||'';
@@ -550,6 +525,7 @@ function initApp(monday) {
   }
 
   async function updateResp(sub, newPersonName) {
+    // Resolve respColId: tenta colIds guardado, depois _colSchemaCache pelo tipo, depois pelo título
     let respColId = sub.respColId;
     if(!respColId && _colSchemaCache && _colSchemaCache.length) {
       const personCol = _colSchemaCache.find(c =>
@@ -558,6 +534,7 @@ function initApp(monday) {
       );
       if(personCol) respColId = personCol.id;
     }
+    // Último recurso: busca schema fresco do board de subitems via item específico
     if(!respColId) {
       try {
         const r2 = await monday.api('query { items(ids:[' + sub.subId + ']) { board { columns { id title type } } } }');
@@ -568,11 +545,13 @@ function initApp(monday) {
     }
     if(!respColId) { showToast('Coluna Resp. não encontrada.', true); return; }
 
+    // Resolve o ID Monday do nome da pessoa (exacto primeiro, depois parcial)
     let uid = Object.keys(userNameById).find(id => userNameById[id] === newPersonName);
     if(!uid) uid = Object.keys(userNameById).find(id =>
       userNameById[id].toLowerCase().includes(newPersonName.toLowerCase()) ||
       newPersonName.toLowerCase().includes(userNameById[id].toLowerCase())
     );
+    // Se ainda não encontrou, tenta buscar users novamente
     if(!uid) {
       await fetchUsers();
       uid = Object.keys(userNameById).find(id => userNameById[id] === newPersonName);
@@ -683,8 +662,11 @@ function initApp(monday) {
     clearTimeout(refreshTimer);
     refreshTimer = setTimeout(() => refreshData(true), delay);
   }
+  // Captura mudanças via SDK (automacoes, edicoes inline no board)
   monday.listen('events', () => scheduleRefresh(1500));
 
+  // Poll apos abertura de card: verifica o subitem especifico 3s e 8s depois
+  // O SDK nao emite evento quando o card fecha, entao fazemos polling do subitem
   let _cardPollTimers = [];
   function pollAfterCardOpen(subId) {
     _cardPollTimers.forEach(clearTimeout);
@@ -713,6 +695,7 @@ function initApp(monday) {
         if(changed) refreshData(true);
       } catch(e) { /* silencioso */ }
     }
+    // 3s e 8s apos abrir — cobre edicoes rapidas e lentas
     _cardPollTimers.push(setTimeout(doCheck, 3000));
     _cardPollTimers.push(setTimeout(doCheck, 8000));
   }
@@ -767,12 +750,27 @@ function initApp(monday) {
   }
   function hideDragTip() { dragTip.style.display = 'none'; }
 
-  // ── RENDER ──────────────────────────────────────────────────────────────
   function render() {
     const days = getAllDays();
-    const NORMAL_HS = 8;
 
-    // ── Header de dias (sincronizado horizontalmente com tl-wrap) ─────────
+    const NORMAL_HS = 8;
+    const NORMAL_H  = NORMAL_HS * PX_PER_HS;
+
+    let globalMaxHs = NORMAL_HS;
+    const _visData = selPersons.length>0 ? allData.filter(p=>selPersons.includes(p.person)) : allData;
+    _visData.forEach(p=>{
+      days.forEach(d=>{
+        if(isBlocked(d)) return;
+        const ds=fmtD(d);
+        const sum=p.subitems.reduce((acc,sub)=>{
+          const ss=fmtD(sub.range.start),se=fmtD(sub.range.end);
+          return ds>=ss&&ds<=se ? acc+sub.hsFallback : acc;
+        },0);
+        if(sum>globalMaxHs) globalMaxHs=sum;
+      });
+    });
+    const ROW_H = PAD*2 + globalMaxHs*PX_PER_HS;
+
     const dhi = document.getElementById('days-header-inner');
     dhi.innerHTML = '';
     for(let w=0; w<TOTAL_DAYS/7; w++) {
@@ -792,10 +790,6 @@ function initApp(monday) {
       });
       wg.appendChild(lbl); wg.appendChild(wd); dhi.appendChild(wg);
     }
-
-    // Ajusta largura do header para alinhar com o conteúdo
-    const daysHeader = document.getElementById('days-header');
-    daysHeader.style.width = (NAME_W + TOTAL_DAYS * DAY_W) + 'px';
 
     let data = allData;
     if(selPersons.length > 0) data = data.filter(p => selPersons.includes(p.person));
@@ -821,7 +815,7 @@ function initApp(monday) {
 
     data.forEach(p => {
       const row = document.createElement('div');
-      row.className='prow';
+      row.className='prow'; row.style.minHeight=ROW_H+'px';
 
       const nc = document.createElement('div'); nc.className='pname';
       nc.style.width=NAME_W+'px'; nc.draggable=true; nc.dataset.person=p.person;
@@ -917,19 +911,12 @@ function initApp(monday) {
         }
       });
 
-      // ── ALTURA EXACTA: simula o topOff real de cada coluna (inclui GAPs) ─
-      let maxColPx = PAD * 2 + NORMAL_HS * PX_PER_HS; // mínimo = 1 dia normal
+      let maxDayHs = NORMAL_HS;
       Object.values(dayMap).forEach(dList => {
-        let colPx = PAD;
-        dList.forEach(b => {
-          const hs = b.dayHs ?? b.sub.hsFallback;
-          colPx += Math.max(14, Math.round(hs * PX_PER_HS)) + GAP;
-        });
-        colPx += PAD; // padding inferior
-        if(colPx > maxColPx) maxColPx = colPx;
+        const s=dList.reduce((a,b)=>a+(b.dayHs??b.sub.hsFallback),0);
+        if(s>maxDayHs) maxDayHs=s;
       });
-      row.style.minHeight = maxColPx + 'px';
-      // ────────────────────────────────────────────────────────────────────
+      row.style.minHeight=(PAD*2+maxDayHs*PX_PER_HS)+'px';
 
       Object.entries(dayMap).forEach(([diStr,dayBList])=>{
         const di=parseInt(diStr);
@@ -984,6 +971,7 @@ function initApp(monday) {
             const ddW=180;let lft=rect.right+4;if(lft+ddW>window.innerWidth)lft=rect.left-ddW-4;
             dd.style.cssText=`display:block;top:${rect.bottom+2}px;left:${Math.max(4,lft)}px`;});
 
+          // 1 clique → abre card completo | 2 cliques → abre atualizações
           let _clickTimer=null;
           blk.addEventListener('click',e=>{
             if(e._dragged)return;
@@ -1013,6 +1001,7 @@ function initApp(monday) {
             const startX=e.clientX,startY=e.clientY;let mode=null;
             const ghost=document.createElement('div');ghost.style.cssText='position:fixed;opacity:0.6;pointer-events:none;z-index:9999;border-radius:5px;background:'+cliColor(sub.clientCode)+';padding:4px 8px;font-size:10px;color:#fff;font-weight:600;white-space:nowrap;display:none';ghost.textContent=sub.jobName;document.body.appendChild(ghost);
             function onMove(ev){const dx=ev.clientX-startX,dy=ev.clientY-startY;if(!mode&&(Math.abs(dx)>12||Math.abs(dy)>12))mode=Math.abs(dy)>Math.abs(dx)?'reorder':'move';if(mode==='reorder'){ev._dragged=true;ghost.style.display='block';ghost.style.left=(ev.clientX+10)+'px';ghost.style.top=(ev.clientY+10)+'px';blk.style.opacity='0.4';
+                // Highlight da linha alvo e texto do ghost
                 const hoverRow=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('.prow');
                 const hoverPerson=hoverRow?.querySelector('.pname')?.dataset?.person;
                 document.querySelectorAll('.prow').forEach(r=>r.style.background='');
@@ -1021,11 +1010,15 @@ function initApp(monday) {
               }else if(mode==='move'){const delta=Math.round(dx/DAY_W);const ns=new Date(sub.range.start.getTime()+delta*86400000);const ne=new Date(sub.range.end.getTime()+delta*86400000);blk._pendingStart=ns;blk._pendingEnd=ne;blk.style.opacity='0.7';ghost.style.display='block';ghost.style.left=(ev.clientX+10)+'px';ghost.style.top=(ev.clientY+10)+'px';ghost.textContent=`${ns.getDate()} ${MON_PT[ns.getMonth()]} → ${ne.getDate()} ${MON_PT[ne.getMonth()]}`;}}
             function onUp(ev){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);ghost.remove();blk.style.opacity='1';document.querySelectorAll('.prow').forEach(r=>r.style.background='');
               if(mode==='reorder'){
+                // Detecta se pousou em outra linha (prow) → muda responsável
                 const targetRow = document.elementFromPoint(ev.clientX, ev.clientY)?.closest('.prow');
                 const targetPerson = targetRow?.querySelector('.pname')?.dataset?.person;
                 if(targetPerson && targetPerson !== p.person) {
+                  // Drop em outra pessoa → muda Resp.
+                  const prevPerson = p.person;
                   showDragTip(`→ ${targetPerson}`, ev.clientX, ev.clientY);
                   setTimeout(hideDragTip, 1200);
+                  // Atualiza localmente
                   const idx = allData.findIndex(d=>d.person===p.person);
                   const tgtIdx = allData.findIndex(d=>d.person===targetPerson);
                   if(idx>-1) allData[idx].subitems = allData[idx].subitems.filter(s=>s.subId!==sub.subId);
@@ -1033,6 +1026,7 @@ function initApp(monday) {
                   render();
                   updateResp(sub, targetPerson);
                 } else {
+                  // Drop na mesma linha → reordena
                   const allBlks=[...document.querySelectorAll('.blk')];
                   const tgt=allBlks.find(b2=>{if(b2===blk)return false;const r=b2.getBoundingClientRect();return ev.clientY>=r.top&&ev.clientY<=r.bottom;});
                   if(tgt&&tgt._subId){const arr=[...new Set([...sortedSubs.map(s=>s.subId)])];const fi=arr.indexOf(sub.subId),ti=arr.indexOf(tgt._subId);if(fi!==-1&&ti!==-1){arr.splice(fi,1);arr.splice(ti,0,sub.subId);}subOrder[p.person]=arr;localStorage.setItem(`subOrder_${boardFilterKey}`,JSON.stringify(subOrder));render();}
@@ -1061,7 +1055,6 @@ function initApp(monday) {
 
     updateWeekLabel(days);
   }
-  // ── FIM RENDER ──────────────────────────────────────────────────────────
 
   function populateFilter() {
     const dd = document.getElementById('fperson-dd');
@@ -1141,16 +1134,11 @@ function initApp(monday) {
 
   const wrap = document.getElementById('tl-wrap');
 
-  // ── Sincroniza scroll horizontal do header com o scroll do conteúdo ────
-  wrap.addEventListener('scroll', () => {
-    const headerInner = document.getElementById('tl-header-inner');
-    headerInner.scrollLeft = wrap.scrollLeft;
-    updateWeekLabel(getAllDays());
-  });
-
   wrap.addEventListener('wheel', e=>{
     if(e.shiftKey){ e.preventDefault(); wrap.scrollLeft+=e.deltaY; }
   }, {passive:false});
+
+  wrap.addEventListener('scroll', ()=>{ updateWeekLabel(getAllDays()); });
 
   let isPanning=false, panStartX=0, panStartY=0, panScrollLeft=0, panScrollTop=0;
   wrap.addEventListener('mousedown', e=>{
@@ -1278,8 +1266,14 @@ function initApp(monday) {
         catch(e){}
       }
 
-      // Carrega users e admins em paralelo enquanto prepara o fetch
-      await Promise.all([
+      const firstPagePromise = (async () => {
+        const query = `query { boards(ids:[${boardId}]) { items_page(limit:200) { cursor items { id name subitems { id name board{id columns{id title type}} column_values{id text value} } } } } }`;
+        const r = await monday.api(query);
+        return r.data.boards[0].items_page;
+      })();
+
+      const [firstPage] = await Promise.all([
+        firstPagePromise,
         fetchUsers().then(() => {
           localStorage.setItem('users_photo_cache_9mm', JSON.stringify({ts:Date.now(), data:{photos:userPhotoMap,names:userNameById}}));
         }),
@@ -1291,6 +1285,9 @@ function initApp(monday) {
         isAdmin = true;
         document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');
       }
+
+      let allItems = firstPage.items;
+      allData = processItems(allItems);
 
       const PARTIAL_ACCESS = {
         "109716069": ["Pietra Ceretta", "Pire", "William Amaral"]
@@ -1305,10 +1302,6 @@ function initApp(monday) {
         }
       }
 
-      // Usa fetchData simplificado (2 passos: itens leves + subitems por batch)
-      const allItems = await fetchData(boardId);
-      allData = processItems(allItems);
-
       populateFilter(); populateTipo(); populateSetor();
       if(isAdmin) {
         document.getElementById('ftipo').value = selTipo;
@@ -1319,13 +1312,18 @@ function initApp(monday) {
       document.getElementById('loading').style.display='none';
       document.getElementById('tl-outer').style.display='flex';
       render();
-      requestAnimationFrame(()=>{
-        const days=getAllDays();
-        const idx=todayIndex(days);
-        if(idx>=0) wrap.scrollLeft=scrollXForIndex(idx);
-        document.getElementById('tl-header-inner').scrollLeft = wrap.scrollLeft;
-        updateWeekLabel(days);
-      });
+      requestAnimationFrame(()=>{ const days=getAllDays(); const idx=todayIndex(days); if(idx>=0) wrap.scrollLeft=scrollXForIndex(idx); updateWeekLabel(days); });
+
+      let cursor = firstPage.cursor;
+      while(cursor) {
+        const r = await monday.api(`query { boards(ids:[${boardId}]) { items_page(limit:200,cursor:"${cursor}") { cursor items { id name subitems { id name board{id columns{id title type}} column_values{id text value} } } } } }`);
+        const page = r.data.boards[0].items_page;
+        allItems = allItems.concat(page.items);
+        cursor = page.cursor || null;
+        allData = processItems(allItems);
+        populateFilter(); populateTipo(); populateSetor();
+        render();
+      }
 
     } catch(err) {
       document.getElementById('loading').innerHTML=`<span style="color:#ef5350">Erro: ${err.message}</span>`;
