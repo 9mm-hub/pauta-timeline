@@ -808,26 +808,8 @@ function initApp(monday) {
     const rows = document.getElementById('rows'); rows.innerHTML='';
 
     data.forEach(p => {
-      // ── ALTURA INDIVIDUAL: calcula maxDayHs só para esta pessoa ─────────
-      const personDayMap = {};
-      p.subitems.forEach(sub => {
-        days.forEach(d => {
-          if(isBlocked(d)) return;
-          const ds = fmtD(d);
-          const ss = fmtD(sub.range.start), se = fmtD(sub.range.end);
-          if(ds >= ss && ds <= se) {
-            if(!personDayMap[ds]) personDayMap[ds] = 0;
-            personDayMap[ds] += sub.hsFallback;
-          }
-        });
-      });
-      let personMaxDayHs = NORMAL_HS;
-      Object.values(personDayMap).forEach(hs => { if(hs > personMaxDayHs) personMaxDayHs = hs; });
-      const ROW_H = PAD * 2 + personMaxDayHs * PX_PER_HS;
-      // ────────────────────────────────────────────────────────────────────
-
       const row = document.createElement('div');
-      row.className='prow'; row.style.minHeight=ROW_H+'px';
+      row.className='prow';
 
       const nc = document.createElement('div'); nc.className='pname';
       nc.style.width=NAME_W+'px'; nc.draggable=true; nc.dataset.person=p.person;
@@ -923,13 +905,19 @@ function initApp(monday) {
         }
       });
 
-      // Recalcula altura real da linha com base nos blocos renderizados
-      let maxDayHs = NORMAL_HS;
+      // ── ALTURA EXACTA: simula o topOff real de cada coluna (inclui GAPs) ─
+      let maxColPx = PAD * 2 + NORMAL_HS * PX_PER_HS; // mínimo = 1 dia normal
       Object.values(dayMap).forEach(dList => {
-        const s=dList.reduce((a,b)=>a+(b.dayHs??b.sub.hsFallback),0);
-        if(s>maxDayHs) maxDayHs=s;
+        let colPx = PAD;
+        dList.forEach(b => {
+          const hs = b.dayHs ?? b.sub.hsFallback;
+          colPx += Math.max(14, Math.round(hs * PX_PER_HS)) + GAP;
+        });
+        colPx += PAD; // padding inferior
+        if(colPx > maxColPx) maxColPx = colPx;
       });
-      row.style.minHeight=(PAD*2+maxDayHs*PX_PER_HS)+'px';
+      row.style.minHeight = maxColPx + 'px';
+      // ────────────────────────────────────────────────────────────────────
 
       Object.entries(dayMap).forEach(([diStr,dayBList])=>{
         const di=parseInt(diStr);
