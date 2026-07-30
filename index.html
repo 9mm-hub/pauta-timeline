@@ -406,47 +406,59 @@ function initApp(monday) {
     return _colSchemaCache;
   }
 
-  async function fetchData(bId) {
-    const colSchema = await fetchColumnSchema(bId);
-    const colTitleMap={}, colTypeMap={};
-    colSchema.forEach(c=>{ colTitleMap[c.id]=c.title; colTypeMap[c.id]=c.type; });
-
-    let allItems=[], cursor=null;
-    do {
-      const cursorPart=cursor?`, cursor:"${cursor}"`:'';
-      const query=`query {
-        boards(ids:[${bId}]) {
-          items_page(limit:100${cursorPart}) {
-            cursor
-            items {
-              id name
-              subitems { id name column_values { id text } }
-            }
+  async function apiWithRetry(query) {
+    for(let attempt=0; attempt<3; attempt++) {
+      try {
+        const res = await monday.api(query);
+        if(res.errors) {
+          const ce = res.errors.find(e=>e.extensions?.code==='COMPLEXITY_BUDGET_EXHAUSTED');
+          if(ce) {
+            const wait = (ce.extensions?.retry_in_seconds||30)*1000;
+            console.warn('Complexity, aguardando '+wait/1000+'s');
+            await new Promise(r=>setTimeout(r,wait));
+            continue;
           }
         }
-      }`;
-      let res;
-      for(let attempt=0;attempt<3;attempt++){
-        try{
-          res=await monday.api(query);
-          if(res.errors){
-            const ce=res.errors.find(e=>e.extensions?.code==='COMPLEXITY_BUDGET_EXHAUSTED');
-            if(ce){ const wait=(ce.extensions?.retry_in_seconds||30)*1000; console.warn(`Complexity, aguardando ${wait/1000}s`); await new Promise(r=>setTimeout(r,wait)); continue; }
-          }
-          break;
-        }catch(e){ if(attempt===2)throw e; await new Promise(r=>setTimeout(r,5000)); }
+        return res;
+      } catch(e) {
+        if(attempt===2) throw e;
+        await new Promise(r=>setTimeout(r,8000));
       }
-      const page=res.data.boards[0].items_page;
-      page.items.forEach(item=>{
-        item.subitems.forEach(sub=>{
-          sub.board={ id: bId, columns: colSchema };
-        });
-      });
-      allItems=allItems.concat(page.items);
-      cursor=page.cursor||null;
-      if(cursor) await new Promise(r=>setTimeout(r,300));
+    }
+  }
+
+  async function fetchData(bId) {
+    const colSchema = await fetchColumnSchema(bId);
+
+    // PASSO 1: busca so id+name dos itens (query leve)
+    let itemStubs=[], cursor=null;
+    do {
+      const cursorPart = cursor ? ', cursor:"'+cursor+'"' : '';
+      const res = await apiWithRetry('query { boards(ids:['+bId+']) { items_page(limit:50'+cursorPart+') { cursor items { id name } } } }');
+      const page = res.data.boards[0].items_page;
+      itemStubs = itemStubs.concat(page.items);
+      cursor = page.cursor || null;
+      if(cursor) await new Promise(r=>setTimeout(r,500));
     } while(cursor);
-    return allItems;
+
+    // PASSO 2: busca subitems em batches de 20 itens
+    const BATCH = 20;
+    const itemMap = {};
+    itemStubs.forEach(i => { itemMap[i.id] = { id:i.id, name:i.name, subitems:[] }; });
+
+    for(let i=0; i<itemStubs.length; i+=BATCH) {
+      const ids = itemStubs.slice(i, i+BATCH).map(x=>x.id).join(',');
+      const res = await apiWithRetry('query { items(ids:['+ids+']) { id subitems { id name column_values { id text } } } }');
+      (res.data.items||[]).forEach(item => {
+        if(itemMap[item.id]) {
+          item.subitems.forEach(sub => { sub.board = { id: bId, columns: colSchema }; });
+          itemMap[item.id].subitems = item.subitems;
+        }
+      });
+      if(i+BATCH < itemStubs.length) await new Promise(r=>setTimeout(r,600));
+    }
+
+    return Object.values(itemMap);
   }
 
   function parseRange(str) {
@@ -1266,14 +1278,8 @@ function initApp(monday) {
         catch(e){}
       }
 
-      const firstPagePromise = (async () => {
-        const query = `query { boards(ids:[${boardId}]) { items_page(limit:200) { cursor items { id name subitems { id name board{id columns{id title type}} column_values{id text value} } } } } }`;
-        const r = await monday.api(query);
-        return r.data.boards[0].items_page;
-      })();
-
-      const [firstPage] = await Promise.all([
-        firstPagePromise,
+      // Carrega users e admins em paralelo enquanto prepara o fetch
+      await Promise.all([
         fetchUsers().then(() => {
           localStorage.setItem('users_photo_cache_9mm', JSON.stringify({ts:Date.now(), data:{photos:userPhotoMap,names:userNameById}}));
         }),
@@ -1285,9 +1291,6 @@ function initApp(monday) {
         isAdmin = true;
         document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');
       }
-
-      let allItems = firstPage.items;
-      allData = processItems(allItems);
 
       const PARTIAL_ACCESS = {
         "109716069": ["Pietra Ceretta", "Pire", "William Amaral"]
@@ -1301,6 +1304,10 @@ function initApp(monday) {
           selPersons = resolvedName ? [resolvedName] : [];
         }
       }
+
+      // Usa fetchData simplificado (2 passos: itens leves + subitems por batch)
+      const allItems = await fetchData(boardId);
+      allData = processItems(allItems);
 
       populateFilter(); populateTipo(); populateSetor();
       if(isAdmin) {
@@ -1316,21 +1323,9 @@ function initApp(monday) {
         const days=getAllDays();
         const idx=todayIndex(days);
         if(idx>=0) wrap.scrollLeft=scrollXForIndex(idx);
-        // sincroniza header imediatamente após scroll inicial
         document.getElementById('tl-header-inner').scrollLeft = wrap.scrollLeft;
         updateWeekLabel(days);
       });
-
-      let cursor = firstPage.cursor;
-      while(cursor) {
-        const r = await monday.api(`query { boards(ids:[${boardId}]) { items_page(limit:200,cursor:"${cursor}") { cursor items { id name subitems { id name board{id columns{id title type}} column_values{id text value} } } } } }`);
-        const page = r.data.boards[0].items_page;
-        allItems = allItems.concat(page.items);
-        cursor = page.cursor || null;
-        allData = processItems(allItems);
-        populateFilter(); populateTipo(); populateSetor();
-        render();
-      }
 
     } catch(err) {
       document.getElementById('loading').innerHTML=`<span style="color:#ef5350">Erro: ${err.message}</span>`;
