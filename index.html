@@ -9,8 +9,7 @@
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;background:#000;color:#e0e0e0;height:100vh;display:flex;flex-direction:column;overflow:hidden}
 #app{display:flex;flex-direction:column;height:100vh}
 #hdr{display:flex;flex-wrap:wrap;align-items:center;gap:6px;padding:8px 12px;background:#000;border-bottom:1px solid #333;flex-shrink:0}
-.nav{background:#1a1a1a;border:none;color:#ccc;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center}
-.nav:hover{background:#2a2a2a}
+.nav{background:#1a1a1a;border:none;color:#ccc;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:15px;display:flex;align-items:center;justify-content:center}.nav:hover{background:#2a2a2a}
 #wlbl{font-size:12px;color:#aaa;min-width:110px;text-align:center}
 #btn-today,#btn-refresh{background:#1a1a1a;border:1px solid #333;color:#ccc;padding:4px 10px;border-radius:6px;cursor:pointer;font-size:11px}
 #btn-today:hover,#btn-refresh:hover{background:#2a2a2a}
@@ -170,8 +169,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
   <button id="btn-save-w">Salvar</button>
   <button id="btn-close-w">Cancelar</button>
 </div></div>
+
 <script>
 !function(e){var t={};function n(i){if(t[i])return t[i].exports;var r=t[i]={i:i,l:!1,exports:{}};return e[i].call(r.exports,r,r.exports,n),r.l=!0,r.exports}n.m=e,n.c=t,n.d=function(e,t,i){n.o(e,t)||Object.defineProperty(e,t,{enumerable:!0,get:i})},n.r=function(e){"undefined"!=typeof Symbol&&Symbol.toStringTag&&Object.defineProperty(e,Symbol.toStringTag,{value:"Module"}),Object.defineProperty(e,"__esModule",{value:!0})},n.t=function(e,t){if(1&t&&(e=n(e)),8&t)return e;if(4&t&&"object"==typeof e&&e&&e.__esModule)return e;var i=Object.create(null);if(n.r(i),Object.defineProperty(i,"default",{enumerable:!0,value:e}),2&t&&"string"!=typeof e)for(var r in e)n.d(i,r,function(t){return e[t]}.bind(null,r));return i},n.n=function(e){var t=e&&e.__esModule?function(){return e.default}:function(){return e};return n.d(t,"a",t),t},n.o=function(e,t){return Object.prototype.hasOwnProperty.call(e,t)},n.p="",n(n.s=4)}([function(e,t,n){e.exports=n(6)},function(e,t,n){(function(t){function n(){return void 0!==t&&!1}const i=(e,i)=>n()&&"undefined"!==t.env[e]&&void 0!==t.env[e]?t.env[e]:i,r=()=>i("MONDAY_COM_PROTOCOL","https"),s=()=>i("MONDAY_COM_DOMAIN","monday.com"),o=()=>i("MONDAY_OAUTH_SUBDOMAIN","auth."),a=()=>`${r()}://${i("MONDAY_SUBDOMAIN_API","api.")}${s()}/v2`;e.exports={get MONDAY_DOMAIN(){return s()},get MONDAY_PROTOCOL(){return r()},get MONDAY_API_URL(){return a()},get MONDAY_OAUTH_URL(){return`${r()}://${o()}${s()}/oauth2/authorize`},get MONDAY_OAUTH_TOKEN_URL(){return`${r()}://${o()}${s()}/oauth2/token`}}}).call(this,n(7))},function(e,t){const n="undefined"!=typeof window&&void 0!==window.document;e.exports={convertToArrayIfNeeded:e=>Array.isArray(e)?e:[e],isBrowser:n}},function(e,t){e.exports={logWarnings:e=>{const t=e&&e.extensions&&e.extensions.warnings;return t&&Array.isArray(t)?(t.forEach(e=>{if(e&&e.message)try{const t=e.locations&&e.locations.map(e=>`line ${e.line}, column ${e.column}`).join("; "),n=e.path&&e.path.join(" \u2192 ");let i=e.message;i=i.replace(/\.$/,""),i=i.charAt(0).toLowerCase()+i.slice(1);const r=["[monday API]",`${n}:`,i,t&&`@ ${t}`,e.extensions?["\n\nAdditional details:",e.extensions]:void 0].flat().filter(Boolean);console.warn(...r)}catch(t){e&&console.warn("[monday API] Warning:",e)}}),e):e}}},function(e,t,n){var i,r;const{isBrowser:s}=n(2),o=n(s?5:13);"undefined"!=typeof self&&self,void 0===(r="function"==typeof(i=function(){return window.mondaySdk=o,o})?i.call(t,n,t,e):i)||(e.exports=r)},function(e,t,n){const i=n(0),{MONDAY_OAUTH_URL:r}=n(1),{convertToArrayIfNeeded:s}=n(2),{initScrollHelperIfNeeded:o}=n(10),{initBackgroundTracking:a}=n(11),{logWarnings:c}=n(3),l=[],u="v2",d="instance";class h{constructor(e={}){this._clientId=e.clientId,this._apiToken=e.apiToken,this._apiVersion=e.apiVersion,this.listeners={},this.setClientId=this.setClientId.bind(this),this.setToken=this.setToken.bind(this),this.setApiVersion=this.setApiVersion.bind(this),this.api=this.api.bind(this),this.listen=this.listen.bind(this),this.get=this.get.bind(this),this.set=this.set.bind(this),this.execute=this.execute.bind(this),this.oauth=this.oauth.bind(this),this._receiveMessage=this._receiveMessage.bind(this),this.storage={setItem:this.setStorageItem.bind(this),getItem:this.getStorageItem.bind(this),deleteItem:this.deleteStorageItem.bind(this),instance:{setItem:this.setStorageInstanceItem.bind(this),getItem:this.getStorageInstanceItem.bind(this),deleteItem:this.deleteStorageInstanceItem.bind(this)}},window.addEventListener("message",this._receiveMessage,!1),e.withoutScrollHelper||o(),a(this)}setClientId(e){this._clientId=e}setToken(e){this._apiToken=e}setApiVersion(e){this._apiVersion=e}api(e,t={}){const n={query:e,variables:t.variables},r=t.token||this._apiToken,s=t.apiVersion||this._apiVersion;let o;return o=r?i.execute(n,r,{apiVersion:s}):this._localApi("api",{params:n,apiVersion:s}).then(e=>e.data),o.then(c)}listen(e,t,n){const i=s(e),r=[];return i.forEach(e=>{r.push(this._addListener(e,t)),this._localApi("listen",{type:e,params:n})}),()=>{r.forEach(e=>e())}}get(e,t){return this._localApi("get",{type:e,params:t})}set(e,t){return this._localApi("set",{type:e,params:t})}execute(e,t){return this._localApi("execute",{type:e,params:t})}track(e,t){return this.execute("track",{name:e,data:t})}oauth(e={}){const t=e.clientId||this._clientId;if(!t)throw new Error("clientId is required");const n=`${e.mondayOauthUrl||r}?client_id=${t}`;window.location=n}setStorageItem(e,t,n={}){return this._localApi("storage",{method:"set",key:e,value:t,options:n,segment:u})}getStorageItem(e,t={}){return this._localApi("storage",{method:"get",key:e,options:t,segment:u})}deleteStorageItem(e,t={}){return this._localApi("storage",{method:"delete",key:e,options:t,segment:u})}setStorageInstanceItem(e,t,n={}){return this._localApi("storage",{method:"set",key:e,value:t,options:n,segment:d})}getStorageInstanceItem(e,t={}){return this._localApi("storage",{method:"get",key:e,options:t,segment:d})}deleteStorageInstanceItem(e,t={}){return this._localApi("storage",{method:"delete",key:e,options:t,segment:d})}_localApi(e,t){return new Promise((i,r)=>{const s=this._generateRequestId(),o=this._clientId,a=n(12).version;window.parent.postMessage({method:e,args:t,requestId:s,clientId:o,version:a},"*");const c=this._addListener(s,e=>{if(c(),e.errorMessage){const t=new Error(e.errorMessage);t.data=e.data,r(t)}else i(e)})})}_receiveMessage(e){const{method:t,type:n,requestId:i}=e.data,r=this.listeners[t]||l,s=this.listeners[n]||l,o=this.listeners[i]||l;let a=new Set([...r,...s,...o]);a&&a.forEach(t=>{try{t(e.data)}catch(e){console.error("Message callback error: ",e)}})}_addListener(e,t){return this.listeners[e]=this.listeners[e]||new Set,this.listeners[e].add(t),()=>{this.listeners[e].delete(t),0===this.listeners[e].size&&delete this.listeners[e]}}_generateRequestId(){return Math.random().toString(36).substring(2,9)}_removeEventListener(){window.removeEventListener("message",this._receiveMessage,!1)}_clearListeners(){this.listeners=[]}}e.exports=function(e={}){return new h(e)}},function(e,t,n){const{MONDAY_API_URL:i,MONDAY_OAUTH_TOKEN_URL:r}=n(1),s=n(8);e.exports={execute:async function(e,t,n={}){if(!t&&n.url!==r)throw new Error("Token is required");const o=`${n.url||i}${n.path||""}`;let a=await function(e,t,n,i={}){return s.nodeFetch(e,{method:i.method||"POST",body:JSON.stringify(t||{}),headers:{Authorization:n,"Content-Type":"application/json",...i.apiVersion?{"API-Version":i.apiVersion}:{}}})}(o,e,t,n);const c=a.status,l=a.headers.get("content-type");if(!l||!l.includes("application/json")){if(504===c)throw new Error("Received timeout from monday.com's GraphQL API");const e=await a.text();throw new Error(e)}try{return await a.json()}catch(e){throw new Error("Could not parse JSON from monday.com's GraphQL API response")}},COULD_NOT_PARSE_JSON_RESPONSE_ERROR:"Could not parse JSON from monday.com's GraphQL API response",TOKEN_IS_REQUIRED_ERROR:"Token is required",API_TIMEOUT_ERROR:"Received timeout from monday.com's GraphQL API"}},function(e,t){var n,i,r=e.exports={};function s(){throw new Error("setTimeout has not been defined")}function o(){throw new Error("clearTimeout has not been defined")}function a(e){if(n===setTimeout)return setTimeout(e,0);if((n===s||!n)&&setTimeout)return n=setTimeout,setTimeout(e,0);try{return n(e,0)}catch(t){try{return n.call(null,e,0)}catch(t){return n.call(this,e,0)}}}!function(){try{n="function"==typeof setTimeout?setTimeout:s}catch(e){n=s}try{i="function"==typeof clearTimeout?clearTimeout:o}catch(e){i=o}}();var c,l=[],u=!1,d=-1;function h(){u&&c&&(u=!1,c.length?l=c.concat(l):d=-1,l.length&&p())}function p(){if(!u){var e=a(h);u=!0;for(var t=l.length;t;){for(c=l,l=[];++d<t;)c&&c[d].run();d=-1,t=l.length}c=null,u=!1,function(e){if(i===clearTimeout)return clearTimeout(e);if((i===o||!i)&&clearTimeout)return i=clearTimeout,clearTimeout(e);try{i(e)}catch(t){try{return i.call(null,e)}catch(t){return i.call(this,e)}}}(e)}}function f(e,t){this.fun=e,this.array=t}function m(){}r.nextTick=function(e){var t=new Array(arguments.length-1);if(arguments.length>1)for(var n=1;n<arguments.length;n++)t[n-1]=arguments[n];l.push(new f(e,t)),1!==l.length||u||a(p)},f.prototype.run=function(){this.fun.apply(null,this.array)},r.title="browser",r.browser=!0,r.env={},r.argv=[],r.version="",r.versions={},r.on=m,r.addListener=m,r.once=m,r.off=m,r.removeListener=m,r.removeAllListeners=m,r.emit=m,r.prependOnceListener=m,r.listeners=function(e){return[]},r.binding=function(e){throw new Error("process.binding is not supported")},r.cwd=function(){return"/"},r.chdir=function(e){throw new Error("process.chdir is not supported")},r.umask=function(){return 0}},function(e,t,n){const i=n(9);e.exports={nodeFetch:function(e,t={}){return i(e,t)}}},function(e,t,n){"use strict";var i=function(){if("undefined"!=typeof self)return self;if("undefined"!=typeof window)return window;if(void 0!==i)return i;throw new Error("unable to locate global object")}();e.exports=t=i.fetch,t.default=i.fetch.bind(i),t.Headers=i.Headers,t.Request=i.Request,t.Response=i.Response},function(e,t){let n=!1;e.exports={initScrollHelperIfNeeded:function(){if(n)return;n=!0;const e=document.createElement("style");e.appendChild(document.createTextNode('body::before { content: ""; position: fixed; top: 0; right: 0; bottom: 0; left: 0; pointer-events: none; z-index: 2147483647; }')),(document.head||document.getElementsByTagName("head")[0]).appendChild(e)}}},function(e,t){let n=!1;e.exports={initBackgroundTracking:e=>{if(n)return;n=!0;const t=()=>{e.track("ping")};t(),setInterval(t,3e5)}}},function(e){e.exports=JSON.parse('{"name":"monday-sdk-js","version":"0.4.12"}')},function(e,t,n){const{logWarnings:i}=n(3),r=n(0),{oauthToken:s}=n(14);class o{constructor(e={}){this._token=e.token,this._apiVersion=e.apiVersion,this.setToken=this.setToken.bind(this),this.setApiVersion=this.setApiVersion.bind(this),this.api=this.api.bind(this)}setToken(e){this._token=e}setApiVersion(e){this._apiVersion=e}api(e,t={}){const n={query:e,variables:t.variables},s=t.token||this._token,o=t.apiVersion||this._apiVersion;if(!s)throw new Error("Should send 'token' as an option or call mondaySdk.setToken(TOKEN)");return r.execute(n,s,{apiVersion:o}).then(i)}oauthToken(e,t,n){return s(e,t,n)}}e.exports=function(e={}){return new o(e)}},function(e,t,n){const{execute:i}=n(0),{MONDAY_OAUTH_TOKEN_URL:r}=n(1);e.exports={oauthToken:(e,t,n)=>i({code:e,client_id:t,client_secret:n},null,{url:r})}}]);
+
 </script>
 <script>
 (function(){
@@ -188,7 +189,7 @@ function initApp(monday){
   const DAYS_PT=['Dom','Seg','Ter','Qua','Qui','Sex','Sab'];
   const MON_PT=['jan','fev','mar','abr','mai','jun','jul','ago','set','out','nov','dez'];
   const PALETTE=(()=>{const o=[];for(let i=0;i<48;i++){const h=Math.round((i*137.508)%360),s=52+i%4*8,l=33+i%3*8;o.push(`hsl(${h},${s}%,${l}%)`);}return o;})();
-  const PARTIAL_ACCESS={"109716069":["Pietra Ceretta","Pire","William Amaral"]};
+  const PARTIAL_ACCESS={'109716069':['Pietra Ceretta','Pire','William Amaral']};
   const ADMIN_USER_ID=null;
 
   /* ─── ESTADO ─── */
@@ -205,12 +206,7 @@ function initApp(monday){
   const cliColors={};
   function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return h>>>0;}
   function cliColor(c){if(!cliColors[c])cliColors[c]=PALETTE[hashStr(c)%PALETTE.length];return cliColors[c];}
-  /* lighten: contorno mais claro que o card */
-  function lightenColor(c,amt=30){
-    const m=cliColor(c).match(/hsl\((\d+),(\d+)%,(\d+)%\)/);
-    if(!m)return cliColor(c);
-    return`hsl(${m[1]},${m[2]}%,${Math.min(100,+m[3]+amt)}%)`;
-  }
+  function lightenColor(c,amt=30){const m=cliColor(c).match(/hsl\((\d+),(\d+)%,(\d+)%\)/);if(!m)return cliColor(c);return`hsl(${m[1]},${m[2]}%,${Math.min(100,+m[3]+amt)}%)`;}
   const avColors=['#5c7cfa','#f06595','#ffa94d','#51cf66','#cc5de8','#22b8cf','#ff6b6b','#74c0fc'];
   const avMap={};let avI=0;
   function avColor(n){if(!avMap[n]){avMap[n]=avColors[avI%avColors.length];avI++;}return avMap[n];}
@@ -224,7 +220,6 @@ function initApp(monday){
   function isHoliday(d){return holidays.includes(fmtD(d));}
   function isBlocked(d){return isWknd(d)||isHoliday(d);}
   function thisMonday(){const t=new Date(),dw=t.getDay(),m=new Date(t);m.setDate(t.getDate()-(dw===0?6:dw-1));m.setHours(12,0,0,0);return m;}
-
   function getAllDays(){
     const total=(weeksB+weeksA)*7,mon=thisMonday(),start=new Date(mon);
     start.setDate(mon.getDate()-weeksB*7);
@@ -233,11 +228,7 @@ function initApp(monday){
   function todayIndex(days){const td=fmtD(new Date());return days.findIndex(d=>fmtD(d)===td);}
   function scrollXForIndex(idx){return Math.max(0,idx*DAY_W-60);}
   function scrollByWeeks(n){document.getElementById('tl-wrap').scrollBy({left:n*WEEK_PX,behavior:'smooth'});}
-  function scrollToToday(){
-    const wrap=document.getElementById('tl-wrap'),days=getAllDays(),idx=todayIndex(days);
-    if(idx>=0)wrap.scrollTo({left:scrollXForIndex(idx),behavior:'smooth'});
-    updateWeekLabel(days);
-  }
+  function scrollToToday(){const wrap=document.getElementById('tl-wrap'),days=getAllDays(),idx=todayIndex(days);if(idx>=0)wrap.scrollTo({left:scrollXForIndex(idx),behavior:'smooth'});updateWeekLabel(days);}
   function updateWeekLabel(days){
     const wrap=document.getElementById('tl-wrap'),sl=wrap.scrollLeft,vw=wrap.clientWidth-NAME_W;
     const si=Math.max(0,Math.floor(sl/DAY_W)),ei=Math.min(days.length-1,Math.floor((sl+vw)/DAY_W));
@@ -245,16 +236,35 @@ function initApp(monday){
     if(s&&e)document.getElementById('wlbl').textContent=`${s.getDate()} ${MON_PT[s.getMonth()]} - ${e.getDate()} ${MON_PT[e.getMonth()]} ${e.getFullYear()}`;
   }
 
+  /* ─── OP HELPERS ───
+     OP e HSD seguem a mesma logica: string de numeros separados por espaco,
+     cada posicao corresponde ao dia util N do cronograma do subitem.
+     opAt(sub, workPos) -> numero de ordem naquele dia util (menor = mais acima)
+     opUpdate(sub, workPos, newOrder) -> devolve nova string OP com so aquela posicao alterada
+  ─── */
+  function opAt(sub,wp){
+    if(!sub.op||!sub.op.trim())return Infinity; // sem OP: vai para o fim
+    const arr=sub.op.trim().split(/\s+/).map(Number);
+    const v=arr[Math.min(wp,arr.length-1)];
+    return isNaN(v)?Infinity:v;
+  }
+  function opUpdate(sub,wp,newOrder){
+    // monta array atual, expande se necessario, substitui posicao wp
+    const arr=sub.op&&sub.op.trim()?sub.op.trim().split(/\s+/).map(Number):[];
+    while(arr.length<=wp)arr.push(0); // 0 = indefinido
+    arr[wp]=newOrder;
+    return arr.join(' ');
+  }
+
   /* ─── EXPANSAO PROGRESSIVA ─── */
   function setupProgressiveScroll(){
     if(_expandedFull)return;
     const wrap=document.getElementById('tl-wrap');
     function expand(){
-      if(_expandedFull)return;_expandedFull=true;
-      wrap.removeEventListener('scroll',onScroll);
+      if(_expandedFull)return;_expandedFull=true;wrap.removeEventListener('scroll',onScroll);
       weeksB=WB_FULL;weeksA=WA_FULL;
-      const days=getAllDays(),idx=todayIndex(days);
       render();
+      const days=getAllDays(),idx=todayIndex(days);
       if(idx>=0)wrap.scrollLeft=scrollXForIndex(idx);
     }
     function onScroll(){const ms=wrap.scrollWidth-wrap.clientWidth,sl=wrap.scrollLeft;if(sl>ms*0.65||sl<ms*0.08)expand();}
@@ -329,8 +339,8 @@ function initApp(monday){
         const hsd=hsdTxt?hsdTxt.split(/\s+/).map(Number).filter(n=>!isNaN(n)):null;
         const hsRaw=parseInt(cols['HS']||'');
         const hsFallback=isNaN(hsRaw)?defaultHs:hsRaw;
-        const opTxt=(cols['OP']||'').trim();
-        const op=(opTxt&&!isNaN(parseInt(opTxt)))?parseInt(opTxt):null;
+        // OP: string bruta, interpretada por opAt() / opUpdate()
+        const op=(cols['OP']||'').trim()||null;
         if(!pm[resp])pm[resp]={person:resp,subitems:[]};
         pm[resp].subitems.push({
           subId:sub.id,boardId:sub.board?sub.board.id:null,parentId:item.id,
@@ -351,7 +361,8 @@ function initApp(monday){
       return(res?.data?.items?.[0]?.subitems||[]).map(s=>{
         const ctm={};(s.board?.columns||[]).forEach(c=>ctm[c.id]=c.title);
         const cols={};s.column_values.forEach(c=>cols[ctm[c.id]||c.id]=c.text);
-        return{subId:s.id,tipo:cols['Funcao']||cols['Tipo']||s.name||'Subitem'};
+        // Funcao com acento correto
+        return{subId:s.id,tipo:cols['\u0046un\u00e7\u00e3o']||cols['Funcao']||cols['Tipo']||s.name||'Subitem'};
       });
     }catch(e){return[];}
   }
@@ -360,7 +371,8 @@ function initApp(monday){
   async function updateRange(sub,ns,ne){
     if(!sub.boardId||!sub.cronColId){showToast('Coluna Cronograma nao encontrada',true);return;}
     try{
-      await monday.api(`mutation{change_column_value(board_id:${sub.boardId},item_id:${sub.subId},column_id:"${sub.cronColId}",value:${JSON.stringify(JSON.stringify({from:fmtD(ns),to:fmtD(ne)}))}){id}}`);
+      const val=JSON.stringify({from:fmtD(ns),to:fmtD(ne)});
+      await monday.api(`mutation{change_column_value(board_id:${sub.boardId},item_id:${sub.subId},column_id:"${sub.cronColId}",value:${JSON.stringify(val)}){id}}`);
       showToast('Datas atualizadas!');
     }catch(err){showToast('Erro: '+(err?.message||'').slice(0,80),true);}
   }
@@ -373,14 +385,21 @@ function initApp(monday){
     }catch(err){showToast('Erro: '+(err?.message||'').slice(0,60),true);}
   }
 
-  async function updateOP(sub,newOp){
-    if(!sub.boardId)return;
+  async function updateOP(sub,newOpStr){
+    // resolve colId
     let colId=sub.opColId;
     if(!colId&&_colSchemaCache){const c=_colSchemaCache.find(c=>c.title==='OP');if(c)colId=c.id;}
+    if(!colId){
+      try{
+        const r=await monday.api(`query{items(ids:[${sub.subId}]){board{columns{id title}}}}`);
+        const c=(r?.data?.items?.[0]?.board?.columns||[]).find(c=>c.title==='OP');
+        if(c){colId=c.id;sub.opColId=c.id;}
+      }catch(e){}
+    }
     if(!colId){console.warn('Coluna OP nao encontrada');return;}
     try{
-      await monday.api(`mutation{change_simple_column_value(board_id:${sub.boardId},item_id:${sub.subId},column_id:"${colId}",value:${JSON.stringify(String(newOp))}){id}}`);
-      sub.op=newOp;
+      await monday.api(`mutation{change_simple_column_value(board_id:${sub.boardId},item_id:${sub.subId},column_id:"${colId}",value:${JSON.stringify(newOpStr)}){id}}`);
+      sub.op=newOpStr;
     }catch(err){console.warn('Erro OP:',err);}
   }
 
@@ -411,10 +430,7 @@ function initApp(monday){
     try{
       const r=await monday.api('query{users{id name photo_thumb}}');
       (r.data.users||[]).forEach(u=>{
-        if(u.name){
-          userNameById[String(u.id)]=u.name;
-          if(u.photo_thumb)userPhotoById[u.name]=u.photo_thumb;
-        }
+        if(u.name){userNameById[String(u.id)]=u.name;if(u.photo_thumb)userPhotoById[u.name]=u.photo_thumb;}
       });
     }catch(e){console.warn('Erro users:',e);}
   }
@@ -427,12 +443,11 @@ function initApp(monday){
   async function loadSubAdmins(){try{const r=await monday.storage.getItem('sub_admins_9mm');subAdmins=r.data?.value?JSON.parse(r.data.value):[];}catch(e){subAdmins=[];}}
   async function saveSubAdmins(){try{await monday.storage.setItem('sub_admins_9mm',JSON.stringify(subAdmins));}catch(e){showToast('Erro ao guardar acesso',true);}}
 
-  /* ─── UNDO (Ctrl+Z) ─── */
+  /* ─── UNDO ─── */
   const undoStack=[];
   function pushUndo(type,sub,prev){undoStack.push({type,sub,prev});if(undoStack.length>5)undoStack.shift();}
   document.addEventListener('keydown',async e=>{
-    if(!(e.ctrlKey||e.metaKey)||e.key!=='z')return;
-    e.preventDefault();
+    if(!(e.ctrlKey||e.metaKey)||e.key!=='z')return;e.preventDefault();
     if(!undoStack.length){showToast('Nada para desfazer');return;}
     const a=undoStack.pop();
     try{
@@ -448,30 +463,17 @@ function initApp(monday){
     const btn=document.getElementById('btn-refresh');
     if(btn)btn.classList.add('spinning');
     if(!silent)showToast('Atualizando...');
-    try{
-      const items=await fetchData(currentBoardId);
-      allData=processItems(items);
-      await fetchUsers();
-      populateFilter();render();
-      if(!silent)showToast('Atualizado!');
-    }catch(err){showToast('Erro ao atualizar',true);}
+    try{const items=await fetchData(currentBoardId);allData=processItems(items);await fetchUsers();populateFilter();render();if(!silent)showToast('Atualizado!');}
+    catch(err){showToast('Erro ao atualizar',true);}
     finally{if(btn)btn.classList.remove('spinning');}
   }
   setInterval(()=>refreshData(true),5*60*1000);
-  let _refreshTimer=null;
-  monday.listen('events',()=>{clearTimeout(_refreshTimer);_refreshTimer=setTimeout(()=>refreshData(true),1500);});
+  let _rTimer=null;
+  monday.listen('events',()=>{clearTimeout(_rTimer);_rTimer=setTimeout(()=>refreshData(true),1500);});
 
   /* ─── TOOLTIP ─── */
   const tooltip=document.getElementById('blk-tooltip');
-  function showTooltip(html,x,y){
-    tooltip.innerHTML=html;tooltip.style.display='block';
-    tooltip.style.left=(x+14)+'px';tooltip.style.top=(y+14)+'px';
-    requestAnimationFrame(()=>{
-      const r=tooltip.getBoundingClientRect();
-      if(r.right>window.innerWidth)tooltip.style.left=(x-r.width-8)+'px';
-      if(r.bottom>window.innerHeight)tooltip.style.top=(y-r.height-8)+'px';
-    });
-  }
+  function showTooltip(html,x,y){tooltip.innerHTML=html;tooltip.style.display='block';tooltip.style.left=(x+14)+'px';tooltip.style.top=(y+14)+'px';requestAnimationFrame(()=>{const r=tooltip.getBoundingClientRect();if(r.right>window.innerWidth)tooltip.style.left=(x-r.width-8)+'px';if(r.bottom>window.innerHeight)tooltip.style.top=(y-r.height-8)+'px';});}
   function hideTooltip(){tooltip.style.display='none';}
 
   /* ─── DRAG TIP ─── */
@@ -491,25 +493,21 @@ function initApp(monday){
     });
     document.getElementById('access-panel').classList.add('open');
   }
-  document.getElementById('btn-save-access').addEventListener('click',async()=>{
-    subAdmins=[...document.querySelectorAll('#access-list input:checked')].map(c=>c.dataset.uid).filter(Boolean);
-    await saveSubAdmins();document.getElementById('access-panel').classList.remove('open');showToast('Acesso guardado!');
-  });
+  document.getElementById('btn-save-access').addEventListener('click',async()=>{subAdmins=[...document.querySelectorAll('#access-list input:checked')].map(c=>c.dataset.uid).filter(Boolean);await saveSubAdmins();document.getElementById('access-panel').classList.remove('open');showToast('Acesso guardado!');});
   document.getElementById('btn-close-access').addEventListener('click',()=>document.getElementById('access-panel').classList.remove('open'));
   document.getElementById('baccess').addEventListener('click',openAccessPanel);
 
-  /* ════════════════════════════════
+  /* ════════════════════════════════════════
      RENDER
-  ════════════════════════════════ */
+  ════════════════════════════════════════ */
   function render(){
     const days=getAllDays(),TOTAL=days.length;
 
-    /* cabeçalho de dias */
+    /* cabecalho dias */
     const dhi=document.getElementById('days-header-inner');dhi.innerHTML='';
     for(let w=0;w<TOTAL/7;w++){
       const wd=days.slice(w*7,w*7+7),wg=document.createElement('div');wg.className='week-group';
-      const lbl=document.createElement('div');lbl.className='week-label';lbl.style.width=(DAY_W*7)+'px';
-      lbl.textContent=`${wd[0].getDate()} ${MON_PT[wd[0].getMonth()]} ${wd[0].getFullYear()}`;
+      const lbl=document.createElement('div');lbl.className='week-label';lbl.style.width=(DAY_W*7)+'px';lbl.textContent=`${wd[0].getDate()} ${MON_PT[wd[0].getMonth()]} ${wd[0].getFullYear()}`;
       const wdc=document.createElement('div');wdc.className='week-days';
       wd.forEach(d=>{const el=document.createElement('div');el.className='dh'+(isToday(d)?' today':'')+(isWknd(d)?' wknd':'')+(isHoliday(d)?' holiday':'');el.style.width=DAY_W+'px';el.innerHTML=`${DAYS_PT[d.getDay()]}<span>${d.getDate()}</span>`;wdc.appendChild(el);});
       wg.appendChild(lbl);wg.appendChild(wdc);dhi.appendChild(wg);
@@ -529,66 +527,49 @@ function initApp(monday){
     const rows=document.getElementById('rows');rows.innerHTML='';
 
     data.forEach(p=>{
-      /* ── monta blocos por subitem ── */
-      /* ordena por OP para que a ordem de empilhamento seja respeitada */
-      const sortedSubs=[...p.subitems].sort((a,b)=>(a.op??Infinity)-(b.op??Infinity));
-
-      const blocks=[];
-      sortedSubs.forEach(sub=>{
+      /* ── monta workDays por subitem (posicao no cronograma) ── */
+      const subWorkDays={};
+      p.subitems.forEach(sub=>{
         const wds=[];
-        days.forEach((d,i)=>{
+        days.forEach((d,di)=>{
           const ds=fmtD(d),ss=fmtD(sub.range.start),se=fmtD(sub.range.end);
-          if(ds>=ss&&ds<=se&&!isBlocked(d))wds.push({di:i,wp:wds.length});
+          if(ds>=ss&&ds<=se&&!isBlocked(d))wds.push({di,wp:wds.length});
         });
-        if(!wds.length)return;
-        const hsAt=wp=>(!sub.hsd||!sub.hsd.length)?sub.hsFallback:sub.hsd[Math.min(wp,sub.hsd.length-1)];
-        let sS=-1,sH=null,sWp=-1;
-        wds.forEach(({di,wp},k)=>{
-          const h=hsAt(wp),cons=k>0&&wds[k-1].di===di-1;
-          if(h===0){if(sS!==-1){blocks.push({sub,cs:sS,ce:Math.min(wds[k-1].di,TOTAL-1),dh:sH,wp0:sWp});sS=-1;sH=null;sWp=-1;}return;}
-          if(sS===-1){sS=di;sH=h;sWp=wp;}
-          else if(!cons){blocks.push({sub,cs:sS,ce:Math.min(wds[k-1].di,TOTAL-1),dh:sH,wp0:sWp});sS=di;sH=h;sWp=wp;}
-          else if(h!==sH){blocks.push({sub,cs:sS,ce:Math.min(wds[k-1].di,TOTAL-1),dh:sH,wp0:sWp,ngR:true});sS=di;sH=h;sWp=wp;}
-        });
-        if(sS!==-1)blocks.push({sub,cs:sS,ce:Math.min(wds[wds.length-1].di,TOTAL-1),dh:sH,wp0:sWp});
+        subWorkDays[sub.subId]=wds;
       });
-      for(let k=1;k<blocks.length;k++){if(blocks[k-1].ngR&&blocks[k-1].sub.subId===blocks[k].sub.subId)blocks[k].ngL=true;}
 
-      /* dayMap: agrupa blocos por dia, mantendo a ordem de sortedSubs (ja por OP) */
+      /* ── dayMap: para cada dia, lista de {sub, wp, hs, opVal} ordenada por opAt ── */
       const dayMap={};
-      blocks.forEach(b=>{
-        for(let di=b.cs;di<=b.ce;di++){
+      p.subitems.forEach(sub=>{
+        const wds=subWorkDays[sub.subId];
+        wds.forEach(({di,wp})=>{
+          const hsAt=(!sub.hsd||!sub.hsd.length)?sub.hsFallback:sub.hsd[Math.min(wp,sub.hsd.length-1)];
+          if(hsAt===0)return;
           if(!dayMap[di])dayMap[di]=[];
-          if(!dayMap[di].find(x=>x.sub.subId===b.sub.subId))dayMap[di].push({...b,di});
-        }
+          dayMap[di].push({sub,wp,hs:hsAt,opVal:opAt(sub,wp)});
+        });
       });
-      /* garante ordem por OP dentro de cada dia */
-      Object.values(dayMap).forEach(dl=>dl.sort((a,b)=>(a.sub.op??Infinity)-(b.sub.op??Infinity)));
+      /* ordena cada dia por opVal (menor = topo; Infinity = sem OP = fim) */
+      Object.values(dayMap).forEach(dl=>dl.sort((a,b)=>a.opVal-b.opVal));
 
-      /* altura individual da linha — nao corta jobs */
+      /* ── altura individual da linha ── */
       let maxHs=NORMAL_HS;
-      Object.values(dayMap).forEach(dl=>{const s=dl.reduce((a,b)=>a+(b.dh??b.sub.hsFallback),0);if(s>maxHs)maxHs=s;});
+      Object.values(dayMap).forEach(dl=>{const s=dl.reduce((a,b)=>a+b.hs,0);if(s>maxHs)maxHs=s;});
       const rowH=PAD*2+maxHs*PX_PER_HS;
 
-      /* ── linha ── */
+      /* ── linha DOM ── */
       const row=document.createElement('div');row.className='prow';row.style.minHeight=rowH+'px';
 
-      /* coluna de nome — sticky left */
+      /* coluna de nome (sticky left) */
       const nc=document.createElement('div');nc.className='pname';nc.style.width=NAME_W+'px';nc.dataset.person=p.person;
       if(isAdmin){nc.draggable=true;nc.style.cursor='grab';}
-
-      /* avatar: foto se disponivel, fallback iniciais */
       const av=document.createElement('div');av.className='av';
       const photoUrl=userPhotoById[p.person];
-      if(photoUrl){
-        const img=document.createElement('img');img.src=photoUrl;img.alt=initials(p.person);av.appendChild(img);
-      } else {
-        av.style.background=avColor(p.person);av.textContent=initials(p.person);
-      }
-      const ns2=document.createElement('div');ns2.className='pname-text';ns2.textContent=p.person;
-      nc.appendChild(av);nc.appendChild(ns2);row.appendChild(nc);
+      if(photoUrl){const img=document.createElement('img');img.src=photoUrl;img.alt=initials(p.person);av.appendChild(img);}
+      else{av.style.background=avColor(p.person);av.textContent=initials(p.person);}
+      const pnt=document.createElement('div');pnt.className='pname-text';pnt.textContent=p.person;
+      nc.appendChild(av);nc.appendChild(pnt);row.appendChild(nc);
 
-      /* drag de linhas — admin, Monday Storage */
       if(isAdmin){
         nc.addEventListener('dragstart',e=>{e.dataTransfer.setData('text/plain',p.person);nc.style.opacity='.4';});
         nc.addEventListener('dragend',()=>nc.style.opacity='1');
@@ -596,8 +577,7 @@ function initApp(monday){
         nc.addEventListener('dragleave',()=>nc.style.background='');
         nc.addEventListener('drop',e=>{
           e.preventDefault();nc.style.background='';
-          const from=e.dataTransfer.getData('text/plain'),to=p.person;
-          if(from===to)return;
+          const from=e.dataTransfer.getData('text/plain'),to=p.person;if(from===to)return;
           if(!rowOrder.length)rowOrder=data.map(d=>d.person);
           const fi=rowOrder.indexOf(from);if(fi>-1)rowOrder.splice(fi,1);
           const ti=rowOrder.indexOf(to);rowOrder.splice(ti>=0?ti:rowOrder.length,0,from);
@@ -605,7 +585,7 @@ function initApp(monday){
         });
       }
 
-      /* células dos dias — overflow visible para nao cortar blocos */
+      /* celulas dos dias (overflow:visible = nao corta blocos) */
       const pdays=document.createElement('div');pdays.className='pdays';pdays.style.width=(TOTAL*DAY_W)+'px';
       days.forEach(d=>{
         const cell=document.createElement('div');
@@ -615,24 +595,24 @@ function initApp(monday){
       });
       row.appendChild(pdays);rows.appendChild(row);
 
-      /* ── blocos por dia ── */
+      /* ── blocos ── */
       Object.entries(dayMap).forEach(([diStr,dl])=>{
         const di=parseInt(diStr);
-        const totalH=dl.reduce((a,b)=>a+(b.dh??b.sub.hsFallback),0);
+        const totalH=dl.reduce((a,b)=>a+b.hs,0);
         let topOff=PAD;
 
-        /* barra de sobrecarga */
+        /* barra de sobrecarga (unica sinalizacao) */
         if(totalH>NORMAL_HS){
           const ind=document.createElement('div');
           ind.style.cssText=`position:absolute;left:${di*DAY_W+3}px;width:${DAY_W-6}px;bottom:2px;height:4px;background:#e03131;border-radius:2px;z-index:6;`;
           ind.title=totalH+'HS';pdays.appendChild(ind);
         }
 
-        dl.forEach(b=>{
-          const{sub,dh,wp0,cs}=b,thisHs=dh??sub.hsFallback;
+        dl.forEach(({sub,wp,hs:thisHs})=>{
           const blkH=Math.max(14,Math.round(thisHs*PX_PER_HS));
           const topOffset=topOff;topOff+=blkH+GAP;
 
+          /* bordas coladas entre dias */
           const hasPrev=dayMap[di-1]?.find(x=>x.sub.subId===sub.subId);
           const hasNext=dayMap[di+1]?.find(x=>x.sub.subId===sub.subId);
           const rL=hasPrev?0:5,rR=hasNext?0:5;
@@ -643,19 +623,18 @@ function initApp(monday){
           const isAtivo=/andamento|pausad/i.test(sub.status||'');
           let extra='';
           if(isConcluido)extra='opacity:.58;';
-          /* contorno mais claro que o card */
           if(isAtivo)extra+=`outline:3px solid ${lightenColor(sub.clientCode,30)};outline-offset:-2px;`;
 
           const blk=document.createElement('div');blk.className='blk';
           blk.style.cssText=`left:${left}px;width:${width}px;top:${topOffset}px;height:${blkH}px;background:${cliColor(sub.clientCode)};border-radius:${rL}px ${rR}px ${rR}px ${rL}px;${extra}`;
-          blk.innerHTML=`<div class="blk-job">${sub.jobName}</div>`+(blkH>=26&&sub.status?`<div class="blk-st">${sub.status} · ${thisHs}HS</div>`:'');
+          blk.innerHTML=`<div class="blk-job">${sub.jobName}</div>`+(blkH>=26&&sub.status?`<div class="blk-st">${sub.status} \u00b7 ${thisHs}HS</div>`:'');
 
-          /* tooltip — todos os utilizadores */
-          blk.addEventListener('mouseenter',e=>showTooltip(`<strong>${sub.jobName}</strong><br><span style="color:#aaa;font-size:10px">${sub.status||'-'} · ${thisHs}HS</span>`,e.clientX,e.clientY));
-          blk.addEventListener('mousemove',e=>showTooltip(`<strong>${sub.jobName}</strong><br><span style="color:#aaa;font-size:10px">${sub.status||'-'} · ${thisHs}HS</span>`,e.clientX,e.clientY));
+          /* tooltip (todos) */
+          blk.addEventListener('mouseenter',e=>showTooltip(`<strong>${sub.jobName}</strong><br><span style="color:#aaa;font-size:10px">${sub.status||'-'} \u00b7 ${thisHs}HS</span>`,e.clientX,e.clientY));
+          blk.addEventListener('mousemove',e=>showTooltip(`<strong>${sub.jobName}</strong><br><span style="color:#aaa;font-size:10px">${sub.status||'-'} \u00b7 ${thisHs}HS</span>`,e.clientX,e.clientY));
           blk.addEventListener('mouseleave',hideTooltip);
 
-          /* menu 3 pontos — todos */
+          /* menu 3 pontos (todos) */
           const menuBtn=document.createElement('button');menuBtn.className='blk-menu';menuBtn.textContent='...';blk.appendChild(menuBtn);
           menuBtn.addEventListener('click',async e=>{
             e.stopPropagation();hideTooltip();
@@ -667,7 +646,7 @@ function initApp(monday){
             dd.innerHTML='';
             const mkLbl=t=>{const d=document.createElement('div');d.className='dd-lbl';d.textContent=t;return d;};
             const mkSep=()=>{const d=document.createElement('div');d.className='dd-sep';return d;};
-            const mkItem=(txt,fn,highlight)=>{const d=document.createElement('div');d.className='dd-item';d.textContent=txt;if(highlight)d.style.color='#7c83f5';d.addEventListener('click',()=>{closeDD();fn();});return d;};
+            const mkItem=(txt,fn,hi)=>{const d=document.createElement('div');d.className='dd-item';d.textContent=txt;if(hi)d.style.color='#7c83f5';d.addEventListener('click',()=>{closeDD();fn();});return d;};
             dd.appendChild(mkLbl('Job'));
             dd.appendChild(mkItem(sub.jobName||'Abrir Job',()=>monday.execute('openItemCard',{itemId:parseInt(sub.parentId)})));
             if(sub.siblings&&sub.siblings.length){
@@ -685,25 +664,24 @@ function initApp(monday){
             else _ct=setTimeout(()=>{_ct=null;monday.execute('openItemCard',{itemId:parseInt(sub.subId)});},220);
           });
 
-          /* ── drag, resize e X (canEditDates: admin ou Marcel) ── */
+          /* ── drag + resize (canEditDates) ── */
           if(canEditDates){
             /* botao X por dia */
-            const wp=(wp0??0)+(di-cs);
+            const wpIdx=wp;
             const nonZero=(sub.hsd||[]).filter(v=>v>0).length||1;
-            const xBtn=document.createElement('button');xBtn.className='blk-x';xBtn.textContent='x';
-            xBtn.style.left=(DAY_W/2-7)+'px';
+            const xBtn=document.createElement('button');xBtn.className='blk-x';xBtn.textContent='x';xBtn.style.left=(DAY_W/2-7)+'px';
             if(nonZero<=1)xBtn.style.display='none';
             xBtn.addEventListener('click',e=>{
               e.stopPropagation();
-              const cur=sub.hsd?[...sub.hsd]:Array(wp+1).fill(thisHs);
-              while(cur.length<=wp)cur.push(cur[cur.length-1]??thisHs);
-              const nw=[...cur];nw[wp]=0;
+              const cur=sub.hsd?[...sub.hsd]:Array(wpIdx+1).fill(thisHs);
+              while(cur.length<=wpIdx)cur.push(cur[cur.length-1]??thisHs);
+              const nw=[...cur];nw[wpIdx]=0;
               if(nw.filter(v=>v>0).length===0){showToast('Nao podes apagar o ultimo dia',true);return;}
               pushUndo('hs',sub,[...cur]);sub.hsd=nw;updateHSD(sub,nw);render();
             });
             blk.appendChild(xBtn);
 
-            /* drag principal */
+            /* drag principal do bloco */
             blk.addEventListener('mousedown',e=>{
               if(['rs-r','rs-l','rs-b','rs-t','blk-menu','blk-x'].some(c=>e.target.classList.contains(c)))return;
               const startX=e.clientX,startY=e.clientY;let mode=null;
@@ -713,23 +691,19 @@ function initApp(monday){
 
               function onMove(ev){
                 const dx=ev.clientX-startX,dy=ev.clientY-startY;
-                if(!mode&&(Math.abs(dx)>10||Math.abs(dy)>10))
-                  mode=Math.abs(dy)>Math.abs(dx)?'op':'move';
+                if(!mode&&(Math.abs(dx)>10||Math.abs(dy)>10))mode=Math.abs(dy)>Math.abs(dx)?'op':'move';
                 ghost.style.left=(ev.clientX+12)+'px';ghost.style.top=(ev.clientY+12)+'px';ghost.style.display='block';
 
                 if(mode==='op'){
                   blk.style.opacity='.4';
-                  /* detecta se esta sobre outra pessoa */
                   const hr=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('.prow');
                   const hp=hr?.querySelector('.pname')?.dataset?.person;
                   document.querySelectorAll('.prow').forEach(r=>r.style.background='');
                   if(hp&&hp!==p.person){
-                    hr.style.background='rgba(124,131,245,.12)';
-                    ghost.textContent='-> '+hp;
-                    hideDragTip();
+                    hr.style.background='rgba(124,131,245,.12)';ghost.textContent='-> '+hp;hideDragTip();
                   } else {
-                    /* feedback OP: mostra posicao estimada no dia */
-                    const thisDl=(dayMap[di]||[]);
+                    /* calcula posicao estimada no dia */
+                    const thisDl=dayMap[di]||[];
                     const rowRect=row.getBoundingClientRect();
                     const relY=Math.max(0,ev.clientY-rowRect.top-PAD);
                     const est=Math.min(thisDl.length,Math.max(1,Math.floor(relY/(blkH+GAP))+1));
@@ -757,7 +731,7 @@ function initApp(monday){
                   const tp=tr?.querySelector('.pname')?.dataset?.person;
 
                   if(tp&&tp!==p.person){
-                    /* mudou de pessoa — atualiza Resp */
+                    /* mudou de pessoa */
                     showDragTip('-> '+tp,ev.clientX,ev.clientY);setTimeout(hideDragTip,1200);
                     const si=allData.findIndex(d=>d.person===p.person);
                     const ti=allData.findIndex(d=>d.person===tp);
@@ -766,25 +740,24 @@ function initApp(monday){
                     render();updateResp(sub,tp);
 
                   } else {
-                    /* mesma pessoa — reordena por OP no dia */
-                    const thisDl=(dayMap[di]||[]).slice(); /* copia ja ordenada por OP */
+                    /* mesma pessoa: reordena OP somente no dia di */
+                    const thisDl=(dayMap[di]||[]).slice(); // ja ordenado por opVal
                     if(thisDl.length>1){
-                      /* encontra o bloco alvo (onde o cursor pousou) */
-                      const tgtEntry=thisDl.find(x=>{
-                        /* posicao aproximada pelo topOffset de cada bloco */
-                        const rowRect=row.getBoundingClientRect();
-                        const blkTop=rowRect.top+x._topOffset;
-                        const blkBot=blkTop+(x.dh??x.sub.hsFallback)*PX_PER_HS;
-                        return ev.clientY>=blkTop&&ev.clientY<=blkBot&&x.sub.subId!==sub.subId;
-                      });
-                      if(tgtEntry){
-                        /* troca de posicao: sub assume o OP do alvo, alvo e demais empurram */
-                        const srcIdx=thisDl.findIndex(x=>x.sub.subId===sub.subId);
-                        const tgtIdx=thisDl.findIndex(x=>x.sub.subId===tgtEntry.sub.subId);
-                        thisDl.splice(srcIdx,1);
-                        thisDl.splice(tgtIdx,0,{...thisDl[0],...{sub}}); /* insere na posicao do alvo */
-                        /* reatribui OP 1,2,3... e salva */
-                        thisDl.forEach((x,i)=>{x.sub.op=i+1;updateOP(x.sub,i+1);});
+                      const rowRect=row.getBoundingClientRect();
+                      const relY=Math.max(0,ev.clientY-rowRect.top-PAD);
+                      /* nova posicao 0-based */
+                      const newPos=Math.min(thisDl.length-1,Math.max(0,Math.floor(relY/(blkH+GAP))));
+                      const srcPos=thisDl.findIndex(x=>x.sub.subId===sub.subId);
+                      if(srcPos!==-1&&srcPos!==newPos){
+                        /* reordena a lista do dia */
+                        const item=thisDl.splice(srcPos,1)[0];
+                        thisDl.splice(newPos,0,item);
+                        /* atribui novos OPs so para esta posicao no workday */
+                        thisDl.forEach((entry,i)=>{
+                          const newOpStr=opUpdate(entry.sub,entry.wp,i+1);
+                          entry.sub.op=newOpStr;
+                          updateOP(entry.sub,newOpStr);
+                        });
                         render();
                       }
                     }
@@ -801,7 +774,7 @@ function initApp(monday){
               document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);
             });
 
-            /* resize direita — data fim */
+            /* resize direita */
             const rsR=document.createElement('div');rsR.className='rs-r';blk.appendChild(rsR);
             rsR.addEventListener('mousedown',e=>{
               e.stopPropagation();e.preventDefault();
@@ -812,7 +785,7 @@ function initApp(monday){
               document.addEventListener('mousemove',onM);document.addEventListener('mouseup',onU);
             });
 
-            /* resize esquerda — data inicio */
+            /* resize esquerda */
             const rsL=document.createElement('div');rsL.className='rs-l';blk.appendChild(rsL);
             rsL.addEventListener('mousedown',e=>{
               e.stopPropagation();e.preventDefault();
@@ -822,39 +795,37 @@ function initApp(monday){
               document.addEventListener('mousemove',onM);document.addEventListener('mouseup',onU);
             });
 
-            /* resize baixo — HSD+ */
+            /* resize baixo HSD+ */
             const rsB=document.createElement('div');rsB.className='rs-b';blk.appendChild(rsB);
             rsB.addEventListener('mousedown',e=>{
               e.stopPropagation();e.preventDefault();
-              const startY=e.clientY,sHs=dh??sub.hsFallback;
+              const startY=e.clientY,sHs=thisHs;
               showDragTip('HS: '+sHs,e.clientX,e.clientY);
               function onM(ev){blk._pH=Math.max(1,sHs+Math.round((ev.clientY-startY)/PX_PER_HS));showDragTip('HS: '+blk._pH,ev.clientX,ev.clientY);}
-              function onU(){document.removeEventListener('mousemove',onM);document.removeEventListener('mouseup',onU);hideDragTip();if(blk._pH&&blk._pH!==sHs){const nw=(sub.hsd||[sHs]).map(v=>v===sHs?blk._pH:v);pushUndo('hs',sub,sub.hsd?[...sub.hsd]:[sHs]);sub.hsd=nw;updateHSD(sub,nw);delete blk._pH;render();}}
+              function onU(){document.removeEventListener('mousemove',onM);document.removeEventListener('mouseup',onU);hideDragTip();if(blk._pH&&blk._pH!==sHs){const cur=sub.hsd?[...sub.hsd]:[sHs];const nw=cur.map(v=>v===sHs?blk._pH:v);pushUndo('hs',sub,sub.hsd?[...sub.hsd]:[sHs]);sub.hsd=nw;updateHSD(sub,nw);delete blk._pH;render();}}
               document.addEventListener('mousemove',onM);document.addEventListener('mouseup',onU);
             });
 
-            /* resize cima — HSD- */
+            /* resize cima HSD- */
             const rsT=document.createElement('div');rsT.className='rs-t';blk.appendChild(rsT);
             rsT.addEventListener('mousedown',e=>{
               e.stopPropagation();e.preventDefault();
-              const startY=e.clientY,sHs=dh??sub.hsFallback;
+              const startY=e.clientY,sHs=thisHs;
               showDragTip('HS: '+sHs,e.clientX,e.clientY);
               function onM(ev){blk._pH=Math.max(1,sHs-Math.round((ev.clientY-startY)/PX_PER_HS));showDragTip('HS: '+blk._pH,ev.clientX,ev.clientY);}
-              function onU(){document.removeEventListener('mousemove',onM);document.removeEventListener('mouseup',onU);hideDragTip();if(blk._pH&&blk._pH!==sHs){const nw=(sub.hsd||[sHs]).map(v=>v===sHs?blk._pH:v);pushUndo('hs',sub,sub.hsd?[...sub.hsd]:[sHs]);sub.hsd=nw;updateHSD(sub,nw);delete blk._pH;render();}}
+              function onU(){document.removeEventListener('mousemove',onM);document.removeEventListener('mouseup',onU);hideDragTip();if(blk._pH&&blk._pH!==sHs){const cur=sub.hsd?[...sub.hsd]:[sHs];const nw=cur.map(v=>v===sHs?blk._pH:v);pushUndo('hs',sub,sub.hsd?[...sub.hsd]:[sHs]);sub.hsd=nw;updateHSD(sub,nw);delete blk._pH;render();}}
               document.addEventListener('mousemove',onM);document.addEventListener('mouseup',onU);
             });
           } /* fim canEditDates */
 
-          /* guarda topOffset no bloco para referencia no OP drag */
-          b._topOffset=topOffset;
           blk._subId=sub.subId;blk._person=p.person;
           pdays.appendChild(blk);
-        }); /* fim dl.forEach */
-      }); /* fim dayMap.forEach */
-    }); /* fim data.forEach */
+        });
+      });
+    });
 
     updateWeekLabel(days);
-  } /* fim render */
+  }
 
   /* ─── FILTROS ─── */
   function populateFilter(){
@@ -864,109 +835,60 @@ function initApp(monday){
     const allLbl=document.createElement('label');allLbl.className='fperson-all';
     const allCk=document.createElement('input');allCk.type='checkbox';allCk.checked=!selPersons.length;
     allLbl.appendChild(allCk);allLbl.appendChild(document.createTextNode(' Todas as pessoas'));dd.appendChild(allLbl);
-    allCk.addEventListener('change',()=>{
-      if(allCk.checked){selPersons=[];dd.querySelectorAll('input[data-person]').forEach(c=>c.checked=false);}
-      updatePersonBtn();localStorage.setItem('filter_persons_'+boardFilterKey,JSON.stringify(selPersons));render();
-    });
+    allCk.addEventListener('change',()=>{if(allCk.checked){selPersons=[];dd.querySelectorAll('input[data-person]').forEach(c=>c.checked=false);}updatePersonBtn();localStorage.setItem('filter_persons_'+boardFilterKey,JSON.stringify(selPersons));render();});
     names.forEach(name=>{
-      const lbl=document.createElement('label'),ck=document.createElement('input');
-      ck.type='checkbox';ck.dataset.person=name;ck.checked=selPersons.includes(name);
+      const lbl=document.createElement('label'),ck=document.createElement('input');ck.type='checkbox';ck.dataset.person=name;ck.checked=selPersons.includes(name);
       lbl.appendChild(ck);lbl.appendChild(document.createTextNode(' '+name));
-      lbl.addEventListener('change',()=>{
-        if(ck.checked){if(!selPersons.includes(name))selPersons.push(name);}
-        else selPersons=selPersons.filter(pp=>pp!==name);
-        allCk.checked=!selPersons.length;
-        updatePersonBtn();localStorage.setItem('filter_persons_'+boardFilterKey,JSON.stringify(selPersons));render();
-      });
+      lbl.addEventListener('change',()=>{if(ck.checked){if(!selPersons.includes(name))selPersons.push(name);}else selPersons=selPersons.filter(pp=>pp!==name);allCk.checked=!selPersons.length;updatePersonBtn();localStorage.setItem('filter_persons_'+boardFilterKey,JSON.stringify(selPersons));render();});
       dd.appendChild(lbl);
     });
     updatePersonBtn();
   }
-  function updatePersonBtn(){
-    const btn=document.getElementById('fperson-btn');
-    btn.textContent=!selPersons.length?'Todas as pessoas':selPersons.length===1?selPersons[0]:selPersons.length+' pessoas';
-  }
+  function updatePersonBtn(){const btn=document.getElementById('fperson-btn');btn.textContent=!selPersons.length?'Todas as pessoas':selPersons.length===1?selPersons[0]:selPersons.length+' pessoas';}
 
   /* ─── FERIADOS ─── */
   function renderHolidays(){
     const list=document.getElementById('holiday-list');list.innerHTML='';
     if(!holidays.length){list.innerHTML='<span style="font-size:12px;color:#666">Nenhum feriado.</span>';return;}
-    holidays.forEach(h=>{
-      const item=document.createElement('div');item.className='h-item';
-      item.innerHTML=`<span>${h}</span><button class="h-del" data-date="${h}">&#x2715;</button>`;
-      list.appendChild(item);
-    });
-    list.querySelectorAll('.h-del').forEach(btn=>btn.addEventListener('click',()=>{
-      holidays=holidays.filter(x=>x!==btn.dataset.date);
-      localStorage.setItem('holidays_9mm',JSON.stringify(holidays));renderHolidays();render();
-    }));
+    holidays.forEach(h=>{const item=document.createElement('div');item.className='h-item';item.innerHTML=`<span>${h}</span><button class="h-del" data-date="${h}">&#x2715;</button>`;list.appendChild(item);});
+    list.querySelectorAll('.h-del').forEach(btn=>btn.addEventListener('click',()=>{holidays=holidays.filter(x=>x!==btn.dataset.date);localStorage.setItem('holidays_9mm',JSON.stringify(holidays));renderHolidays();render();}));
   }
 
   /* ─── EVENTOS GLOBAIS ─── */
   function closeDD(){document.getElementById('blk-dd').style.display='none';}
   document.addEventListener('click',e=>{const dd=document.getElementById('blk-dd');if(dd&&dd.style.display==='block'&&!dd.contains(e.target))closeDD();});
-
   const wrap=document.getElementById('tl-wrap');
   wrap.addEventListener('wheel',e=>{if(e.shiftKey){e.preventDefault();wrap.scrollLeft+=e.deltaY;}},{passive:false});
   wrap.addEventListener('scroll',()=>updateWeekLabel(getAllDays()));
-
   let isPanning=false,panX=0,panY=0,panSL=0,panST=0;
-  wrap.addEventListener('mousedown',e=>{
-    if(e.target!==wrap&&!e.target.classList.contains('pdcell')&&!e.target.classList.contains('pdays'))return;
-    isPanning=true;panX=e.clientX;panY=e.clientY;panSL=wrap.scrollLeft;panST=wrap.scrollTop;
-    wrap.style.cursor='grabbing';wrap.style.userSelect='none';
-  });
+  wrap.addEventListener('mousedown',e=>{if(e.target!==wrap&&!e.target.classList.contains('pdcell')&&!e.target.classList.contains('pdays'))return;isPanning=true;panX=e.clientX;panY=e.clientY;panSL=wrap.scrollLeft;panST=wrap.scrollTop;wrap.style.cursor='grabbing';wrap.style.userSelect='none';});
   document.addEventListener('mousemove',e=>{if(!isPanning)return;wrap.scrollLeft=panSL-(e.clientX-panX);wrap.scrollTop=panST-(e.clientY-panY);});
   document.addEventListener('mouseup',()=>{if(isPanning){isPanning=false;wrap.style.cursor='';wrap.style.userSelect='';}});
-
   document.getElementById('btn-refresh').addEventListener('click',()=>refreshData(false));
   document.getElementById('bp').addEventListener('click',()=>scrollByWeeks(-1));
   document.getElementById('bn').addEventListener('click',()=>scrollByWeeks(1));
   document.getElementById('btn-today').addEventListener('click',scrollToToday);
-
-  document.getElementById('sort-controls').addEventListener('click',e=>{
-    const btn=e.target.closest('.sort-btn');if(!btn)return;
-    sortMode=btn.dataset.sort;localStorage.setItem('filter_sort_'+boardFilterKey,sortMode);
-    document.querySelectorAll('.sort-btn').forEach(b=>b.classList.toggle('active',b===btn));render();
-  });
-
+  document.getElementById('sort-controls').addEventListener('click',e=>{const btn=e.target.closest('.sort-btn');if(!btn)return;sortMode=btn.dataset.sort;localStorage.setItem('filter_sort_'+boardFilterKey,sortMode);document.querySelectorAll('.sort-btn').forEach(b=>b.classList.toggle('active',b===btn));render();});
   const fpBtn=document.getElementById('fperson-btn'),fpDd=document.getElementById('fperson-dd');
   fpBtn.addEventListener('click',e=>{e.stopPropagation();fpDd.classList.toggle('open');});
   document.addEventListener('click',e=>{if(!fpDd.contains(e.target)&&e.target!==fpBtn)fpDd.classList.remove('open');});
-
-  document.getElementById('btn-add-h').addEventListener('click',()=>{
-    const v=document.getElementById('holiday-input').value;
-    if(v&&!holidays.includes(v)){holidays.push(v);localStorage.setItem('holidays_9mm',JSON.stringify(holidays));renderHolidays();render();document.getElementById('holiday-input').value='';}
-  });
+  document.getElementById('btn-add-h').addEventListener('click',()=>{const v=document.getElementById('holiday-input').value;if(v&&!holidays.includes(v)){holidays.push(v);localStorage.setItem('holidays_9mm',JSON.stringify(holidays));renderHolidays();render();document.getElementById('holiday-input').value='';}});
   document.getElementById('bcfg').addEventListener('click',()=>{renderHolidays();document.getElementById('modal-overlay').classList.add('open');});
   document.getElementById('btn-close-modal').addEventListener('click',()=>document.getElementById('modal-overlay').classList.remove('open'));
-  document.getElementById('bpesos').addEventListener('click',()=>{
-    document.getElementById('w-rows').innerHTML=`<div class="w-row"><label>Padrao (sem HS)</label><input type="number" id="dhs" value="${defaultHs}" min="1" max="20"/></div>`;
-    document.getElementById('weights-panel').classList.add('open');
-  });
-  document.getElementById('btn-save-w').addEventListener('click',()=>{
-    const i=document.getElementById('dhs');if(i)defaultHs=parseInt(i.value)||8;
-    localStorage.setItem('default_hs_9mm',String(defaultHs));
-    document.getElementById('weights-panel').classList.remove('open');render();
-  });
+  document.getElementById('bpesos').addEventListener('click',()=>{document.getElementById('w-rows').innerHTML=`<div class="w-row"><label>Padrao (sem HS)</label><input type="number" id="dhs" value="${defaultHs}" min="1" max="20"/></div>`;document.getElementById('weights-panel').classList.add('open');});
+  document.getElementById('btn-save-w').addEventListener('click',()=>{const i=document.getElementById('dhs');if(i)defaultHs=parseInt(i.value)||8;localStorage.setItem('default_hs_9mm',String(defaultHs));document.getElementById('weights-panel').classList.remove('open');render();});
   document.getElementById('btn-close-w').addEventListener('click',()=>document.getElementById('weights-panel').classList.remove('open'));
 
   /* ─── CONTEXTO MONDAY ─── */
   monday.listen('context',async res=>{
     const boardId=res.data.boardId||(res.data.boardIds&&res.data.boardIds[0]);
     const viewId=res.data.instanceId||res.data.viewId||res.data.boardViewId||res.data.appFeatureId||'';
-    currentBoardId=boardId;
-    boardFilterKey=viewId?String(viewId):(boardId?String(boardId):'9mm');
-
-    const userName=res.data.user?.name||'';
-    const userId=String(res.data.user?.id||'');
+    currentBoardId=boardId;boardFilterKey=viewId?String(viewId):(boardId?String(boardId):'9mm');
+    const userName=res.data.user?.name||'',userId=String(res.data.user?.id||'');
     isMainAdmin=res.data.user?.isAdmin===true||(ADMIN_USER_ID&&userId===String(ADMIN_USER_ID));
-
     await Promise.all([loadSubAdmins(),loadRowOrder()]);
-
     isAdmin=isMainAdmin||subAdmins.includes(userId);
     canEditDates=isAdmin||/^Marcel\b/i.test(userName);
-
     if(isAdmin){
       document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');
       document.getElementById('sort-controls').style.display='flex';
@@ -974,47 +896,25 @@ function initApp(monday){
       sortMode=localStorage.getItem('filter_sort_'+boardFilterKey)||'custom';
     }
     if(isMainAdmin)document.getElementById('baccess').style.display='inline-flex';
-
     try{
-      /* busca dados e usuarios em paralelo */
       const[items]=await Promise.all([fetchData(boardId),fetchUsers()]);
       allData=processItems(items);
-
-      /* controle de acesso */
       if(!isAdmin){
-        if(PARTIAL_ACCESS[userId]){
-          selPersons=PARTIAL_ACCESS[userId];
-        } else {
-          const rn=userName||userNameById[userId]||'';
-          selPersons=rn?[rn]:[];
-        }
+        if(PARTIAL_ACCESS[userId]){selPersons=PARTIAL_ACCESS[userId];}
+        else{const rn=userName||userNameById[userId]||'';selPersons=rn?[rn]:[];}
       }
-
       populateFilter();
-      if(isAdmin){
-        updatePersonBtn();
-        document.querySelectorAll('.sort-btn').forEach(b=>b.classList.toggle('active',b.dataset.sort===sortMode));
-      }
-
+      if(isAdmin){updatePersonBtn();document.querySelectorAll('.sort-btn').forEach(b=>b.classList.toggle('active',b.dataset.sort===sortMode));}
       document.getElementById('loading').style.display='none';
       document.getElementById('tl-outer').style.display='flex';
-
       render();
-
-      /* scroll para hoje — imediato + rAF */
+      /* scroll para hoje: imediato + rAF */
       const days=getAllDays(),idx=todayIndex(days);
-      if(idx>=0){
-        wrap.scrollLeft=scrollXForIndex(idx);
-        requestAnimationFrame(()=>{wrap.scrollLeft=scrollXForIndex(idx);updateWeekLabel(getAllDays());});
-      } else {
-        updateWeekLabel(days);
-      }
-
+      if(idx>=0){wrap.scrollLeft=scrollXForIndex(idx);requestAnimationFrame(()=>{wrap.scrollLeft=scrollXForIndex(idx);updateWeekLabel(getAllDays());});}
+      else updateWeekLabel(days);
       setupProgressiveScroll();
-
     }catch(err){
-      document.getElementById('loading').innerHTML=`<span style="color:#ef5350">Erro: ${err.message}</span>`;
-      console.error(err);
+      document.getElementById('loading').innerHTML=`<span style="color:#ef5350">Erro: ${err.message}</span>`;console.error(err);
     }
   });
 }
