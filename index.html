@@ -206,6 +206,7 @@ function initApp(monday){
 
   let weeksB=WB_INIT,weeksA=WA_INIT,_expandedFull=false;
   let allData=[],isAdmin=false,isMainAdmin=false,subAdmins=[],selPersons=[],searchQuery='',sortMode='custom';
+  let isMarcel=false,canEditDates=false;
   let currentBoardId=null,boardFilterKey='9mm';
   let userNameById={},rowOrder=[];
   let holidays=JSON.parse(localStorage.getItem('holidays_9mm')||'[]');
