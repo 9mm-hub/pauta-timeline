@@ -216,6 +216,8 @@ function initApp(monday){
   const cliColors={};
   function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++)h=Math.imul(h^s.charCodeAt(i),16777619);return h>>>0;}
   function cliColor(c){if(!cliColors[c])cliColors[c]=PALETTE[hashStr(c)%PALETTE.length];return cliColors[c];}
+  // Retorna a cor do card com lightness reduzida em `amount` pontos percentuais
+  function darkenColor(c,amount=18){const col=cliColor(c);const m=col.match(/hsl\((\d+),(\d+)%,(\d+)%\)/);if(!m)return col;return`hsl(${m[1]},${m[2]}%,${Math.max(0,parseInt(m[3])-amount)}%)`; }
   const avColors=['#5c7cfa','#f06595','#ffa94d','#51cf66','#cc5de8','#22b8cf','#ff6b6b','#74c0fc'];
   const avMap={};let ai=0;
   function avColor(n){if(!avMap[n]){avMap[n]=avColors[ai%avColors.length];ai++;}return avMap[n];}
@@ -377,6 +379,7 @@ function initApp(monday){
 
       // Blocos
       Object.entries(dayMap).forEach(([diStr,dayBList])=>{
+        dayBList.sort((a,b)=>(a.sub.op??Infinity)-(b.sub.op??Infinity));
         const di=parseInt(diStr),totalDayHs=dayBList.reduce((a,b)=>a+(b.dayHs??b.sub.hsFallback),0),over=totalDayHs>NORMAL_HS;
         let topOff=PAD;
         if(over){const ind=document.createElement('div');ind.style.cssText=`position:absolute;left:${di*DAY_W+3}px;width:${DAY_W-6}px;bottom:2px;height:4px;background:#e03131;border-radius:2px;z-index:6;`;ind.title=`${totalDayHs}HS`;pdays.appendChild(ind);}
@@ -390,7 +393,7 @@ function initApp(monday){
           const isConcluido=/conclu/i.test(sub.status||''),isEmAndamento=/andamento|em pauta|pausad/i.test(sub.status||'');
           let extraStyle='';
           if(isConcluido)extraStyle+='opacity:0.58;';
-          if(isEmAndamento)extraStyle+='outline:2px solid rgba(160,160,160,0.65);outline-offset:-2px;';
+          if(isEmAndamento)extraStyle+=`outline:3px solid ${darkenColor(sub.clientCode,18)};outline-offset:-2px;`;
 
           const blk=document.createElement('div');
           blk.className='blk';
@@ -441,7 +444,11 @@ function initApp(monday){
               function onUp(ev){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);ghost.remove();blk.style.opacity='1';document.querySelectorAll('.prow').forEach(r=>r.style.background='');hideTooltip();
                 if(mode==='reorder'){const tr=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('.prow'),tp=tr?.querySelector('.pname')?.dataset?.person;
                   if(tp&&tp!==p.person){showDragTip('-> '+tp,ev.clientX,ev.clientY);setTimeout(hideDragTip,1200);const idx=allData.findIndex(d=>d.person===p.person),tgtIdx=allData.findIndex(d=>d.person===tp);if(idx>-1)allData[idx].subitems=allData[idx].subitems.filter(s=>s.subId!==sub.subId);if(tgtIdx>-1)allData[tgtIdx].subitems.push(sub);render();updateResp(sub,tp);}
-                  else{const tgtBlk=[...document.querySelectorAll('.blk')].find(b2=>{if(b2===blk)return false;const r=b2.getBoundingClientRect();return ev.clientY>=r.top&&ev.clientY<=r.bottom&&b2._personName===p.person;});if(tgtBlk&&tgtBlk._subId){const arr=[...sortedSubs.map(s=>s.subId)],fi=arr.indexOf(sub.subId),ti=arr.indexOf(tgtBlk._subId);if(fi!==-1&&ti!==-1){arr.splice(fi,1);arr.splice(ti,0,sub.subId);arr.forEach((sid,idx)=>{const s=p.subitems.find(x=>x.subId===sid);if(s){s.op=idx+1;updateOP(s,idx+1);}});render();}}}}
+                  else{const tgtBlk=[...document.querySelectorAll('.blk')].find(b2=>{if(b2===blk)return false;const r=b2.getBoundingClientRect();return ev.clientY>=r.top&&ev.clientY<=r.bottom&&b2._personName===p.person;});if(tgtBlk&&tgtBlk._subId){// Reordena p.subitems por OP atual, depois troca as posições
+                    const ordered=[...p.subitems].sort((a,b)=>(a.op??Infinity)-(b.op??Infinity));
+                    const fi=ordered.findIndex(s=>s.subId===sub.subId),ti=ordered.findIndex(s=>s.subId===tgtBlk._subId);
+                    if(fi!==-1&&ti!==-1){ordered.splice(fi,1);ordered.splice(ti,0,sub);
+                    ordered.forEach((s,idx)=>{s.op=idx+1;updateOP(s,idx+1);});render();}}}}
                 else if(mode==='move'&&blk._pendingStart){ev._dragged=true;pushUndo('range',sub,{start:new Date(sub.range.start),end:new Date(sub.range.end)});sub.range.start=blk._pendingStart;sub.range.end=blk._pendingEnd;updateRange(sub,blk._pendingStart,blk._pendingEnd);delete blk._pendingStart;delete blk._pendingEnd;render();}}
               document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);});
 
