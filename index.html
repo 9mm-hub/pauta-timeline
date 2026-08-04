@@ -553,9 +553,13 @@ function initApp(monday){
       Object.values(dayMap).forEach(dl=>dl.sort((a,b)=>a.opVal-b.opVal));
 
       /* ── altura individual da linha ── */
-      let maxHs=NORMAL_HS;
-      Object.values(dayMap).forEach(dl=>{const s=dl.reduce((a,b)=>a+b.hs,0);if(s>maxHs)maxHs=s;});
-      const rowH=PAD*2+maxHs*PX_PER_HS;
+      /* rowH calculado simulando o empilhamento real (blkH + GAP por bloco) */
+      let rowH=PAD*2+NORMAL_HS*PX_PER_HS;
+      Object.values(dayMap).forEach(dl=>{
+        let h=PAD*2;
+        dl.forEach((entry,i)=>{h+=Math.max(14,Math.round(entry.hs*PX_PER_HS))+(i<dl.length-1?GAP:0);});
+        if(h>rowH)rowH=h;
+      });
 
       /* ── linha DOM ── */
       const row=document.createElement('div');row.className='prow';row.style.height=rowH+'px';
