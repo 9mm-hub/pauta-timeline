@@ -471,7 +471,7 @@ function initApp(monday){
                         render();
                       }
                     }
-                  }}}
+                  }}
                 else if(mode==='move'&&blk._pendingStart){ev._dragged=true;pushUndo('range',sub,{start:new Date(sub.range.start),end:new Date(sub.range.end)});sub.range.start=blk._pendingStart;sub.range.end=blk._pendingEnd;updateRange(sub,blk._pendingStart,blk._pendingEnd);delete blk._pendingStart;delete blk._pendingEnd;render();}}
               document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);});
 
