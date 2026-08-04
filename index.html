@@ -558,7 +558,7 @@ function initApp(monday){
       const rowH=PAD*2+maxHs*PX_PER_HS;
 
       /* ── linha DOM ── */
-      const row=document.createElement('div');row.className='prow';row.style.minHeight=rowH+'px';
+      const row=document.createElement('div');row.className='prow';row.style.height=rowH+'px';
 
       /* coluna de nome (sticky left) */
       const nc=document.createElement('div');nc.className='pname';nc.style.width=NAME_W+'px';nc.dataset.person=p.person;
@@ -586,7 +586,7 @@ function initApp(monday){
       }
 
       /* celulas dos dias (overflow:visible = nao corta blocos) */
-      const pdays=document.createElement('div');pdays.className='pdays';pdays.style.width=(TOTAL*DAY_W)+'px';
+      const pdays=document.createElement('div');pdays.className='pdays';pdays.style.width=(TOTAL*DAY_W)+'px';pdays.style.height=rowH+'px';
       days.forEach(d=>{
         const cell=document.createElement('div');
         cell.className='pdcell'+(isToday(d)?' today-col':'')+(isWknd(d)?' wknd-col':'')+(isHoliday(d)?' holiday-col':'');
