@@ -373,7 +373,7 @@ function initApp(monday){
       }
 
       // Células dos dias
-      const pdays=document.createElement('div');pdays.className='pdays';pdays.style.cssText=`width:${TOTAL_DAYS*DAY_W}px;position:relative;overflow:hidden;`;
+      const pdays=document.createElement('div');pdays.className='pdays';pdays.style.cssText=`width:${TOTAL_DAYS*DAY_W}px;position:relative;overflow:visible;`;
       days.forEach(d=>{const cell=document.createElement('div');cell.className='pdcell'+(isToday(d)?' today-col':'')+(isWknd(d)?' wknd-col':'')+(isHoliday(d)?' holiday-col':'');cell.style.width=DAY_W+'px';cell.style.height=rowH+'px';pdays.appendChild(cell);});
       row.appendChild(pdays);rows.appendChild(row);
 
@@ -390,10 +390,10 @@ function initApp(monday){
           const hasPrev=dayMap[di-1]?.find(x=>x.sub.subId===sub.subId),hasNext=dayMap[di+1]?.find(x=>x.sub.subId===sub.subId);
           const rL=hasPrev?0:5,rR=hasNext?0:5,br=`${rL}px ${rR}px ${rR}px ${rL}px`;
           const left=di*DAY_W+(hasPrev?0:3),width=DAY_W-(hasPrev?0:3)-(hasNext?0:3);
-          const isConcluido=/conclu/i.test(sub.status||''),isEmAndamento=/andamento|em pauta|pausad/i.test(sub.status||'');
+          const isConcluido=/conclu/i.test(sub.status||''),isEmAndamento=/andamento|pausad/i.test(sub.status||'');
           let extraStyle='';
           if(isConcluido)extraStyle+='opacity:0.58;';
-          if(isEmAndamento)extraStyle+=`outline:3px solid ${darkenColor(sub.clientCode,18)};outline-offset:-2px;`;
+          if(isEmAndamento)extraStyle+=`outline:3px solid ${darkenColor(sub.clientCode,28)};outline-offset:-2px;`;
 
           const blk=document.createElement('div');
           blk.className='blk';
@@ -405,8 +405,8 @@ function initApp(monday){
           blk.addEventListener('mousemove',e=>showTooltip(`<strong>${sub.jobName}</strong><br><span style="color:#aaa;font-size:10px">${sub.status||'-'} &middot; HS ${thisHs}</span>`,e.clientX,e.clientY));
           blk.addEventListener('mouseleave',hideTooltip);
 
-          // Botão X por dia (admin)
-          if(isAdmin){
+          // Botão X por dia (admin ou Marcel)
+          if(canEditDates){
             const wp=(wpStart??0)+(di-colStart);
             const nonZero=(sub.hsd||[]).filter(v=>v>0).length||1;
             const xBtn=document.createElement('button');xBtn.className='blk-day-x';xBtn.textContent='x';xBtn.style.left=(DAY_W/2-7)+'px';
@@ -432,23 +432,46 @@ function initApp(monday){
           let _clickTimer=null;
           blk.addEventListener('click',e=>{if(e._dragged)return;hideTooltip();if(_clickTimer){clearTimeout(_clickTimer);_clickTimer=null;monday.execute('openItemCard',{itemId:parseInt(sub.subId),kind:'updates'});}else{_clickTimer=setTimeout(()=>{_clickTimer=null;monday.execute('openItemCard',{itemId:parseInt(sub.subId)});},220);}});
 
-          // Drag e resize (apenas admin)
-          if(isAdmin){
+          // Drag e resize (admin ou Marcel)
+          if(canEditDates){
             blk.addEventListener('mousedown',e=>{
               if(e.target.classList.contains('rs-right')||e.target.classList.contains('rs-left')||e.target.classList.contains('rs-bottom')||e.target.classList.contains('rs-top')||e.target.classList.contains('blk-menu-btn')||e.target.classList.contains('blk-day-x'))return;
               const startX=e.clientX,startY=e.clientY;let mode=null;
               const ghost=document.createElement('div');ghost.style.cssText='position:fixed;opacity:0.6;pointer-events:none;z-index:9999;border-radius:5px;background:'+cliColor(sub.clientCode)+';padding:4px 8px;font-size:10px;color:#fff;font-weight:600;white-space:nowrap;display:none';ghost.textContent=sub.jobName;document.body.appendChild(ghost);
               function onMove(ev){const dx=ev.clientX-startX,dy=ev.clientY-startY;if(!mode&&(Math.abs(dx)>12||Math.abs(dy)>12))mode=Math.abs(dy)>Math.abs(dx)?'reorder':'move';
-                if(mode==='reorder'){ev._dragged=true;ghost.style.display='block';ghost.style.left=(ev.clientX+10)+'px';ghost.style.top=(ev.clientY+10)+'px';blk.style.opacity='0.4';const hr=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('.prow'),hp=hr?.querySelector('.pname')?.dataset?.person;document.querySelectorAll('.prow').forEach(r=>r.style.background='');if(hp&&hp!==p.person){hr.style.background='rgba(124,131,245,0.12)';ghost.textContent='-> '+hp;}else{ghost.textContent=sub.jobName;}}
+                if(mode==='reorder'){ev._dragged=true;ghost.style.display='block';ghost.style.left=(ev.clientX+10)+'px';ghost.style.top=(ev.clientY+10)+'px';blk.style.opacity='0.4';
+                  // Calcula posição OP estimada com base na posição Y do cursor dentro da linha
+                  const rowRect=row.getBoundingClientRect();
+                  const relY=ev.clientY-rowRect.top-PAD;
+                  const estPos=Math.max(1,Math.round(relY/(blkH+GAP))+1);
+                  const hr=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('.prow'),hp=hr?.querySelector('.pname')?.dataset?.person;
+                  document.querySelectorAll('.prow').forEach(r=>r.style.background='');
+                  if(hp&&hp!==p.person){hr.style.background='rgba(124,131,245,0.12)';ghost.textContent='-> '+hp;}
+                  else{ghost.textContent='OP: '+estPos;showDragTip('OP: '+estPos,ev.clientX,ev.clientY);}}
                 else if(mode==='move'){const delta=Math.round(dx/DAY_W);blk._pendingStart=new Date(sub.range.start.getTime()+delta*86400000);blk._pendingEnd=new Date(sub.range.end.getTime()+delta*86400000);blk.style.opacity='0.7';ghost.style.display='block';ghost.style.left=(ev.clientX+10)+'px';ghost.style.top=(ev.clientY+10)+'px';ghost.textContent=`${blk._pendingStart.getDate()} ${MON_PT[blk._pendingStart.getMonth()]} -> ${blk._pendingEnd.getDate()} ${MON_PT[blk._pendingEnd.getMonth()]}`;}}
-              function onUp(ev){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);ghost.remove();blk.style.opacity='1';document.querySelectorAll('.prow').forEach(r=>r.style.background='');hideTooltip();
+              function onUp(ev){document.removeEventListener('mousemove',onMove);document.removeEventListener('mouseup',onUp);ghost.remove();blk.style.opacity='1';document.querySelectorAll('.prow').forEach(r=>r.style.background='');hideTooltip();hideDragTip();
                 if(mode==='reorder'){const tr=document.elementFromPoint(ev.clientX,ev.clientY)?.closest('.prow'),tp=tr?.querySelector('.pname')?.dataset?.person;
                   if(tp&&tp!==p.person){showDragTip('-> '+tp,ev.clientX,ev.clientY);setTimeout(hideDragTip,1200);const idx=allData.findIndex(d=>d.person===p.person),tgtIdx=allData.findIndex(d=>d.person===tp);if(idx>-1)allData[idx].subitems=allData[idx].subitems.filter(s=>s.subId!==sub.subId);if(tgtIdx>-1)allData[tgtIdx].subitems.push(sub);render();updateResp(sub,tp);}
-                  else{const tgtBlk=[...document.querySelectorAll('.blk')].find(b2=>{if(b2===blk)return false;const r=b2.getBoundingClientRect();return ev.clientY>=r.top&&ev.clientY<=r.bottom&&b2._personName===p.person;});if(tgtBlk&&tgtBlk._subId){// Reordena p.subitems por OP atual, depois troca as posições
-                    const ordered=[...p.subitems].sort((a,b)=>(a.op??Infinity)-(b.op??Infinity));
-                    const fi=ordered.findIndex(s=>s.subId===sub.subId),ti=ordered.findIndex(s=>s.subId===tgtBlk._subId);
-                    if(fi!==-1&&ti!==-1){ordered.splice(fi,1);ordered.splice(ti,0,sub);
-                    ordered.forEach((s,idx)=>{s.op=idx+1;updateOP(s,idx+1);});render();}}}}
+                  else{
+                    hideDragTip();
+                    // Pega os subs visíveis no dia em que o bloco está (di = coluna do bloco arrastado)
+                    const thisDayList=dayMap[di];
+                    if(thisDayList&&thisDayList.length>1){
+                      // Calcula nova posição pelo Y do cursor
+                      const rowRect=row.getBoundingClientRect();
+                      const relY=ev.clientY-rowRect.top-PAD;
+                      const newPos=Math.max(0,Math.min(thisDayList.length-1,Math.round(relY/(blkH+GAP))));
+                      // Reordena só os subs deste dia
+                      const dayOrdered=[...thisDayList].sort((a,b)=>(a.sub.op??Infinity)-(b.sub.op??Infinity));
+                      const dragIdx=dayOrdered.findIndex(x=>x.sub.subId===sub.subId);
+                      if(dragIdx!==-1&&dragIdx!==newPos){
+                        dayOrdered.splice(dragIdx,1);
+                        dayOrdered.splice(newPos,0,thisDayList.find(x=>x.sub.subId===sub.subId));
+                        dayOrdered.forEach((x,i)=>{x.sub.op=i+1;updateOP(x.sub,i+1);});
+                        render();
+                      }
+                    }
+                  }}}
                 else if(mode==='move'&&blk._pendingStart){ev._dragged=true;pushUndo('range',sub,{start:new Date(sub.range.start),end:new Date(sub.range.end)});sub.range.start=blk._pendingStart;sub.range.end=blk._pendingEnd;updateRange(sub,blk._pendingStart,blk._pendingEnd);delete blk._pendingStart;delete blk._pendingEnd;render();}}
               document.addEventListener('mousemove',onMove);document.addEventListener('mouseup',onUp);});
 
@@ -520,6 +543,8 @@ function initApp(monday){
     await Promise.all([loadSubAdmins(),loadRowOrder()]);
     const isSubAdmin=subAdmins.includes(String(currentUserId));
     isAdmin=isMainAdmin||isSubAdmin;
+    const isMarcel=/^Marcel/i.test(currentUserName);
+    const canEditDates=isAdmin||isMarcel;
     if(isAdmin){document.querySelectorAll('.admin-only').forEach(el=>el.style.display='inline-flex');const sc=document.getElementById('sort-controls');if(sc)sc.style.display='flex';}
     if(isMainAdmin)document.getElementById('baccess').style.display='inline-flex';
     if(isAdmin){selPersons=JSON.parse(localStorage.getItem('filter_persons_'+boardFilterKey)||'[]');sortMode=localStorage.getItem('filter_sort_'+boardFilterKey)||'custom';}
@@ -531,7 +556,8 @@ function initApp(monday){
       if(isAdmin){updatePersonBtn();document.querySelectorAll('.sort-btn').forEach(b=>b.classList.toggle('active',b.dataset.sort===sortMode));}
       document.getElementById('loading').style.display='none';document.getElementById('tl-outer').style.display='flex';
       render();
-      requestAnimationFrame(()=>{const days=getAllDays(),idx=todayIndex(days);if(idx>=0)wrap.scrollLeft=scrollXForIndex(idx);updateWeekLabel(days);});
+      // Scroll imediato para hoje (duplo: síncrono + rAF para garantir após layout)
+      (()=>{const days=getAllDays(),idx=todayIndex(days);if(idx>=0){wrap.scrollLeft=scrollXForIndex(idx);requestAnimationFrame(()=>{wrap.scrollLeft=scrollXForIndex(idx);updateWeekLabel(days);});}else{updateWeekLabel(days);}})();
       setupProgressiveScroll();
     }catch(err){document.getElementById('loading').innerHTML=`<span style="color:#ef5350">Erro: ${err.message}</span>`;console.error(err);}
   });
