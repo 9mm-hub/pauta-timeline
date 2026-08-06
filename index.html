@@ -106,6 +106,12 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .w-row label{font-size:13px;color:#ccc}
 .w-row input{width:70px;background:#111;border:1px solid #333;color:#fff;padding:5px 8px;border-radius:6px;font-size:13px;text-align:center}
 #btn-save-w{width:100%;margin-top:4px;padding:8px;background:#7c83f5;border:none;color:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
+/* ícone de atualizações — canto inferior direito do bloco */
+.blk-upd{position:absolute;bottom:3px;right:4px;width:16px;height:16px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;z-index:10;line-height:1;padding:0;transition:transform .15s}
+.blk-upd:hover{transform:scale(1.2)}
+.blk-upd.pending{color:rgba(255,255,255,.5)}  /* ainda nao carregado: + escuro */
+.blk-upd.has-upd{background:#fff;color:#333}  /* tem updates: balao branco */
+.blk-upd.no-upd{background:rgba(0,0,0,.3);color:rgba(255,255,255,.4)}  /* sem updates */
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#111;border:1px solid #333;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px;z-index:300;display:none}
 #toast.show{display:block}
 #toast.error{border-color:#e03131;color:#ff8787}
@@ -201,6 +207,7 @@ function initApp(monday){
   let holidays=JSON.parse(localStorage.getItem('holidays_9mm')||'[]');
   let defaultHs=parseInt(localStorage.getItem('default_hs_9mm')||'8');
   let _colSchemaCache=null,_colSchemaBoardId=null;
+  const updatesCache={}; // subId -> true (tem) | false (nao tem) | undefined (nao carregado)
 
   /* ─── CORES ─── */
   const cliColors={};
@@ -354,11 +361,23 @@ function initApp(monday){
     return Object.values(pm);
   }
 
+
+  /* ─── UPDATES (sob demanda, aproveitado no menu ⋮) ─── */
+  async function fetchUpdates(subId){
+    if(subId in updatesCache)return updatesCache[subId];
+    try{
+      const r=await monday.api(`query{items(ids:[${subId}]){updates(limit:1){id}}}`);
+      const hasUpd=((r?.data?.items?.[0]?.updates)||[]).length>0;
+      updatesCache[subId]=hasUpd;
+      return hasUpd;
+    }catch(e){return false;}
+  }
   /* ─── SIBLINGS SOB DEMANDA ─── */
   async function fetchSiblings(parentId){
     try{
-      const res=await monday.api(`query{items(ids:[${parentId}]){subitems{id name column_values{id text}board{columns{id title type}}}}}`);
+      const res=await monday.api(`query{items(ids:[${parentId}]){subitems{id name updates(limit:1){id} column_values{id text}board{columns{id title type}}}}}`);
       return(res?.data?.items?.[0]?.subitems||[]).map(s=>{
+        updatesCache[s.id]=(s.updates||[]).length>0;
         const ctm={};(s.board?.columns||[]).forEach(c=>ctm[c.id]=c.title);
         const cols={};s.column_values.forEach(c=>cols[ctm[c.id]||c.id]=c.text);
         // Funcao com acento correto
@@ -647,6 +666,14 @@ function initApp(monday){
             const ddW=180;let lft=rect.right+4;if(lft+ddW>window.innerWidth)lft=rect.left-ddW-4;
             dd.style.cssText=`display:block;top:${rect.bottom+2}px;left:${Math.max(4,lft)}px`;
             if(sub.siblings===null)sub.siblings=await fetchSiblings(sub.parentId);
+            /* fetchSiblings ja populou updatesCache para todos os siblings via updates(limit:1) */
+            /* atualiza ícone do bloco atual se ainda estava pending */
+            const updBtnEl=blk.querySelector('.blk-upd.pending');
+            if(updBtnEl&&sub.subId in updatesCache){
+              const hasUpd=updatesCache[sub.subId];
+              if(hasUpd){updBtnEl.className='blk-upd has-upd';updBtnEl.textContent='';updBtnEl.style.background='';}
+              else{updBtnEl.className='blk-upd no-upd';updBtnEl.textContent='+';updBtnEl.style.background=lightenColor(sub.clientCode,-15);}
+            }
             dd.innerHTML='';
             const mkLbl=t=>{const d=document.createElement('div');d.className='dd-lbl';d.textContent=t;return d;};
             const mkSep=()=>{const d=document.createElement('div');d.className='dd-sep';return d;};
@@ -823,6 +850,40 @@ function initApp(monday){
           } /* fim canEditDates */
 
           blk._subId=sub.subId;blk._person=p.person;
+
+          /* ícone de updates — canto inferior direito, visível apenas se bloco alto o suficiente */
+          if(blkH>=20){
+            const updBtn=document.createElement('button');updBtn.className='blk-upd';
+            const cached=updatesCache[sub.subId];
+            if(cached===undefined){
+              /* ainda nao carregado: mostra + na cor escurecida */
+              updBtn.classList.add('pending');
+              updBtn.textContent='+';
+              updBtn.style.background=lightenColor(sub.clientCode,-20); /* um pouco mais escuro */
+            } else if(cached){
+              updBtn.classList.add('has-upd');
+              updBtn.textContent='';
+            } else {
+              updBtn.classList.add('no-upd');
+              updBtn.textContent='+';
+              updBtn.style.background=lightenColor(sub.clientCode,-15);
+            }
+            updBtn.title='Atualizacoes';
+            updBtn.addEventListener('click',async e=>{
+              e.stopPropagation();
+              /* carrega updates se ainda nao foi */
+              if(!(sub.subId in updatesCache)){
+                const hasUpd=await fetchUpdates(sub.subId);
+                updatesCache[sub.subId]=hasUpd;
+                /* atualiza visual sem re-render completo */
+                if(hasUpd){updBtn.className='blk-upd has-upd';updBtn.textContent='';}
+                else{updBtn.className='blk-upd no-upd';updBtn.textContent='+';updBtn.style.background=lightenColor(sub.clientCode,-15);}
+              }
+              monday.execute('openItemCard',{itemId:parseInt(sub.subId),kind:'updates'});
+            });
+            blk.appendChild(updBtn);
+          }
+
           pdays.appendChild(blk);
         });
       });
