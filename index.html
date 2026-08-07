@@ -107,11 +107,8 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .w-row input{width:70px;background:#111;border:1px solid #333;color:#fff;padding:5px 8px;border-radius:6px;font-size:13px;text-align:center}
 #btn-save-w{width:100%;margin-top:4px;padding:8px;background:#7c83f5;border:none;color:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
 /* ícone de atualizações — canto inferior direito do bloco */
-.blk-upd{position:absolute;bottom:3px;right:4px;width:16px;height:16px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;z-index:10;line-height:1;padding:0;transition:transform .15s}
+.blk-upd{position:absolute;bottom:3px;right:4px;width:16px;height:16px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;z-index:10;line-height:1;padding:0;transition:transform .15s;background:#fff;color:#333}
 .blk-upd:hover{transform:scale(1.2)}
-.blk-upd.pending{color:rgba(255,255,255,.5)}  /* ainda nao carregado: + escuro */
-.blk-upd.has-upd{background:#fff;color:#333}  /* tem updates: balao branco */
-.blk-upd.no-upd{background:rgba(0,0,0,.3);color:rgba(255,255,255,.4)}  /* sem updates */
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#111;border:1px solid #333;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px;z-index:300;display:none}
 #toast.show{display:block}
 #toast.error{border-color:#e03131;color:#ff8787}
@@ -269,10 +266,17 @@ function initApp(monday){
     const wrap=document.getElementById('tl-wrap');
     function expand(){
       if(_expandedFull)return;_expandedFull=true;wrap.removeEventListener('scroll',onScroll);
+      const prevScroll=wrap.scrollLeft;
       weeksB=WB_FULL;weeksA=WA_FULL;
       render();
+      /* após expansão, mantém scroll no hoje */
       const days=getAllDays(),idx=todayIndex(days);
-      if(idx>=0)wrap.scrollLeft=scrollXForIndex(idx);
+      if(idx>=0){
+        wrap.scrollLeft=scrollXForIndex(idx);
+        requestAnimationFrame(()=>wrap.scrollLeft=scrollXForIndex(idx));
+      } else {
+        wrap.scrollLeft=prevScroll;
+      }
     }
     function onScroll(){const ms=wrap.scrollWidth-wrap.clientWidth,sl=wrap.scrollLeft;if(sl>ms*0.65||sl<ms*0.08)expand();}
     wrap.addEventListener('scroll',onScroll);
@@ -666,13 +670,15 @@ function initApp(monday){
             const ddW=180;let lft=rect.right+4;if(lft+ddW>window.innerWidth)lft=rect.left-ddW-4;
             dd.style.cssText=`display:block;top:${rect.bottom+2}px;left:${Math.max(4,lft)}px`;
             if(sub.siblings===null)sub.siblings=await fetchSiblings(sub.parentId);
-            /* fetchSiblings ja populou updatesCache para todos os siblings via updates(limit:1) */
-            /* atualiza ícone do bloco atual se ainda estava pending */
-            const updBtnEl=blk.querySelector('.blk-upd.pending');
-            if(updBtnEl&&sub.subId in updatesCache){
-              const hasUpd=updatesCache[sub.subId];
-              if(hasUpd){updBtnEl.className='blk-upd has-upd';updBtnEl.textContent='';updBtnEl.style.background='';}
-              else{updBtnEl.className='blk-upd no-upd';updBtnEl.textContent='+';updBtnEl.style.background=lightenColor(sub.clientCode,-15);}
+            /* fetchSiblings populou updatesCache — adiciona ícone ao bloco se tem updates e ainda nao tem o botao */
+            if(updatesCache[sub.subId]===true && !blk.querySelector('.blk-upd') && blkH>=20){
+              const updBtn=document.createElement('button');updBtn.className='blk-upd';
+              updBtn.title='Ver atualizacoes';
+              updBtn.addEventListener('click',e=>{
+                e.stopPropagation();hideTooltip();
+                monday.execute('openItemCard',{itemId:parseInt(sub.subId),kind:'updates'});
+              });
+              blk.appendChild(updBtn);
             }
             dd.innerHTML='';
             const mkLbl=t=>{const d=document.createElement('div');d.className='dd-lbl';d.textContent=t;return d;};
@@ -851,34 +857,12 @@ function initApp(monday){
 
           blk._subId=sub.subId;blk._person=p.person;
 
-          /* ícone de updates — canto inferior direito, visível apenas se bloco alto o suficiente */
-          if(blkH>=20){
+          /* ícone de updates — só aparece quando há atualizações confirmadas */
+          if(blkH>=20 && updatesCache[sub.subId]===true){
             const updBtn=document.createElement('button');updBtn.className='blk-upd';
-            const cached=updatesCache[sub.subId];
-            if(cached===undefined){
-              /* ainda nao carregado: mostra + na cor escurecida */
-              updBtn.classList.add('pending');
-              updBtn.textContent='+';
-              updBtn.style.background=lightenColor(sub.clientCode,-20); /* um pouco mais escuro */
-            } else if(cached){
-              updBtn.classList.add('has-upd');
-              updBtn.textContent='';
-            } else {
-              updBtn.classList.add('no-upd');
-              updBtn.textContent='+';
-              updBtn.style.background=lightenColor(sub.clientCode,-15);
-            }
-            updBtn.title='Atualizacoes';
-            updBtn.addEventListener('click',async e=>{
-              e.stopPropagation();
-              /* carrega updates se ainda nao foi */
-              if(!(sub.subId in updatesCache)){
-                const hasUpd=await fetchUpdates(sub.subId);
-                updatesCache[sub.subId]=hasUpd;
-                /* atualiza visual sem re-render completo */
-                if(hasUpd){updBtn.className='blk-upd has-upd';updBtn.textContent='';}
-                else{updBtn.className='blk-upd no-upd';updBtn.textContent='+';updBtn.style.background=lightenColor(sub.clientCode,-15);}
-              }
+            updBtn.title='Ver atualizacoes';
+            updBtn.addEventListener('click',e=>{
+              e.stopPropagation();hideTooltip();
               monday.execute('openItemCard',{itemId:parseInt(sub.subId),kind:'updates'});
             });
             blk.appendChild(updBtn);
@@ -973,10 +957,15 @@ function initApp(monday){
       document.getElementById('loading').style.display='none';
       document.getElementById('tl-outer').style.display='flex';
       render();
-      /* scroll para hoje: imediato + rAF */
+      /* scroll para hoje: imediato + dois rAF para garantir após layout completo */
       const days=getAllDays(),idx=todayIndex(days);
-      if(idx>=0){wrap.scrollLeft=scrollXForIndex(idx);requestAnimationFrame(()=>{wrap.scrollLeft=scrollXForIndex(idx);updateWeekLabel(getAllDays());});}
-      else updateWeekLabel(days);
+      if(idx>=0){
+        wrap.scrollLeft=scrollXForIndex(idx);
+        requestAnimationFrame(()=>{
+          wrap.scrollLeft=scrollXForIndex(idx);
+          requestAnimationFrame(()=>{wrap.scrollLeft=scrollXForIndex(idx);updateWeekLabel(getAllDays());});
+        });
+      } else updateWeekLabel(days);
       setupProgressiveScroll();
     }catch(err){
       document.getElementById('loading').innerHTML=`<span style="color:#ef5350">Erro: ${err.message}</span>`;console.error(err);
