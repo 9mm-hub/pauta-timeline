@@ -269,14 +269,13 @@ function initApp(monday){
       const prevScroll=wrap.scrollLeft;
       weeksB=WB_FULL;weeksA=WA_FULL;
       render();
-      /* após expansão, mantém scroll no hoje */
-      const days=getAllDays(),idx=todayIndex(days);
-      if(idx>=0){
-        wrap.scrollLeft=scrollXForIndex(idx);
-        requestAnimationFrame(()=>wrap.scrollLeft=scrollXForIndex(idx));
-      } else {
-        wrap.scrollLeft=prevScroll;
-      }
+      /* após expansão, vai para hoje */
+      const days2=getAllDays(),idx2=todayIndex(days2);
+      if(idx2>=0){
+        wrap.scrollLeft=scrollXForIndex(idx2);
+        requestAnimationFrame(()=>{wrap.scrollLeft=scrollXForIndex(idx2);});
+        setTimeout(()=>{wrap.scrollLeft=scrollXForIndex(idx2);updateWeekLabel(getAllDays());},100);
+      } else wrap.scrollLeft=prevScroll;
     }
     function onScroll(){const ms=wrap.scrollWidth-wrap.clientWidth,sl=wrap.scrollLeft;if(sl>ms*0.65||sl<ms*0.08)expand();}
     wrap.addEventListener('scroll',onScroll);
@@ -366,7 +365,7 @@ function initApp(monday){
   }
 
 
-  /* ─── UPDATES (sob demanda, aproveitado no menu ⋮) ─── */
+  /* ─── UPDATES ─── */
   async function fetchUpdates(subId){
     if(subId in updatesCache)return updatesCache[subId];
     try{
@@ -375,6 +374,26 @@ function initApp(monday){
       updatesCache[subId]=hasUpd;
       return hasUpd;
     }catch(e){return false;}
+  }
+
+  /* carrega updates de todos os subitems visiveis em batch (chamado apos primeiro render) */
+  async function fetchAllUpdatesBackground(){
+    /* coleta todos os subIds unicos visiveis */
+    const subIds=[...new Set(allData.flatMap(p=>p.subitems.map(s=>s.subId)).filter(id=>!(id in updatesCache)))];
+    if(!subIds.length)return;
+    /* busca em lotes de 50 para nao explodir a query */
+    const BATCH=50;
+    for(let i=0;i<subIds.length;i+=BATCH){
+      const batch=subIds.slice(i,i+BATCH);
+      try{
+        const r=await monday.api(`query{items(ids:[${batch.join(',')}]){id updates(limit:1){id}}}`);
+        (r?.data?.items||[]).forEach(item=>{updatesCache[item.id]=(item.updates||[]).length>0;});
+      }catch(e){break;}
+      /* pequena pausa entre batches */
+      if(i+BATCH<subIds.length)await new Promise(r=>setTimeout(r,400));
+    }
+    /* re-render para mostrar ícones */
+    render();
   }
   /* ─── SIBLINGS SOB DEMANDA ─── */
   async function fetchSiblings(parentId){
@@ -957,16 +976,18 @@ function initApp(monday){
       document.getElementById('loading').style.display='none';
       document.getElementById('tl-outer').style.display='flex';
       render();
-      /* scroll para hoje: imediato + dois rAF para garantir após layout completo */
+      /* scroll para hoje: imediato + rAF + 100ms timeout para garantir DOM pronto */
       const days=getAllDays(),idx=todayIndex(days);
-      if(idx>=0){
-        wrap.scrollLeft=scrollXForIndex(idx);
-        requestAnimationFrame(()=>{
-          wrap.scrollLeft=scrollXForIndex(idx);
-          requestAnimationFrame(()=>{wrap.scrollLeft=scrollXForIndex(idx);updateWeekLabel(getAllDays());});
-        });
-      } else updateWeekLabel(days);
+      function goToToday(){
+        if(idx>=0){wrap.scrollLeft=scrollXForIndex(idx);updateWeekLabel(getAllDays());}
+        else updateWeekLabel(days);
+      }
+      goToToday();
+      requestAnimationFrame(goToToday);
+      setTimeout(goToToday,100);
       setupProgressiveScroll();
+      /* carrega updates em background sem bloquear a UI */
+      setTimeout(()=>fetchAllUpdatesBackground(),1500);
     }catch(err){
       document.getElementById('loading').innerHTML=`<span style="color:#ef5350">Erro: ${err.message}</span>`;console.error(err);
     }
