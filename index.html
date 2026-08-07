@@ -107,8 +107,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;backgrou
 .w-row input{width:70px;background:#111;border:1px solid #333;color:#fff;padding:5px 8px;border-radius:6px;font-size:13px;text-align:center}
 #btn-save-w{width:100%;margin-top:4px;padding:8px;background:#7c83f5;border:none;color:#fff;border-radius:6px;cursor:pointer;font-size:13px;font-weight:600}
 /* ícone de atualizações — canto inferior direito do bloco */
-.blk-upd{position:absolute;bottom:3px;right:4px;width:16px;height:16px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;z-index:10;line-height:1;padding:0;transition:transform .15s;background:#fff;color:#333}
-.blk-upd:hover{transform:scale(1.2)}
+
 #toast{position:fixed;bottom:16px;left:50%;transform:translateX(-50%);background:#111;border:1px solid #333;color:#fff;padding:10px 16px;border-radius:8px;font-size:12px;z-index:300;display:none}
 #toast.show{display:block}
 #toast.error{border-color:#e03131;color:#ff8787}
@@ -204,7 +203,6 @@ function initApp(monday){
   let holidays=JSON.parse(localStorage.getItem('holidays_9mm')||'[]');
   let defaultHs=parseInt(localStorage.getItem('default_hs_9mm')||'8');
   let _colSchemaCache=null,_colSchemaBoardId=null;
-  const updatesCache={}; // subId -> true (tem) | false (nao tem) | undefined (nao carregado)
 
   /* ─── CORES ─── */
   const cliColors={};
@@ -365,43 +363,13 @@ function initApp(monday){
   }
 
 
-  /* ─── UPDATES ─── */
-  async function fetchUpdates(subId){
-    if(subId in updatesCache)return updatesCache[subId];
-    try{
-      const r=await monday.api(`query{items(ids:[${subId}]){updates(limit:1){id}}}`);
-      const hasUpd=((r?.data?.items?.[0]?.updates)||[]).length>0;
-      updatesCache[subId]=hasUpd;
-      return hasUpd;
-    }catch(e){return false;}
-  }
-
-  /* carrega updates de todos os subitems visiveis em batch (chamado apos primeiro render) */
-  async function fetchAllUpdatesBackground(){
-    /* coleta todos os subIds unicos visiveis */
-    const subIds=[...new Set(allData.flatMap(p=>p.subitems.map(s=>s.subId)).filter(id=>!(id in updatesCache)))];
-    if(!subIds.length)return;
-    /* busca em lotes de 50 para nao explodir a query */
-    const BATCH=50;
-    for(let i=0;i<subIds.length;i+=BATCH){
-      const batch=subIds.slice(i,i+BATCH);
-      try{
-        const r=await monday.api(`query{items(ids:[${batch.join(',')}]){id updates(limit:1){id}}}`);
-        (r?.data?.items||[]).forEach(item=>{updatesCache[item.id]=(item.updates||[]).length>0;});
-      }catch(e){break;}
-      /* pequena pausa entre batches */
-      if(i+BATCH<subIds.length)await new Promise(r=>setTimeout(r,400));
-    }
-    /* re-render para mostrar ícones */
-    render();
-  }
+  
   /* ─── SIBLINGS SOB DEMANDA ─── */
   async function fetchSiblings(parentId){
     try{
-      const res=await monday.api(`query{items(ids:[${parentId}]){subitems{id name updates(limit:1){id} column_values{id text}board{columns{id title type}}}}}`);
+      const res=await monday.api(`query{items(ids:[${parentId}]){subitems{id name column_values{id text}board{columns{id title type}}}}}`);
       return(res?.data?.items?.[0]?.subitems||[]).map(s=>{
-        updatesCache[s.id]=(s.updates||[]).length>0;
-        const ctm={};(s.board?.columns||[]).forEach(c=>ctm[c.id]=c.title);
+const ctm={};(s.board?.columns||[]).forEach(c=>ctm[c.id]=c.title);
         const cols={};s.column_values.forEach(c=>cols[ctm[c.id]||c.id]=c.text);
         // Funcao com acento correto
         return{subId:s.id,tipo:cols['\u0046un\u00e7\u00e3o']||cols['Funcao']||cols['Tipo']||s.name||'Subitem'};
@@ -689,16 +657,7 @@ function initApp(monday){
             const ddW=180;let lft=rect.right+4;if(lft+ddW>window.innerWidth)lft=rect.left-ddW-4;
             dd.style.cssText=`display:block;top:${rect.bottom+2}px;left:${Math.max(4,lft)}px`;
             if(sub.siblings===null)sub.siblings=await fetchSiblings(sub.parentId);
-            /* fetchSiblings populou updatesCache — adiciona ícone ao bloco se tem updates e ainda nao tem o botao */
-            if(updatesCache[sub.subId]===true && !blk.querySelector('.blk-upd') && blkH>=20){
-              const updBtn=document.createElement('button');updBtn.className='blk-upd';
-              updBtn.title='Ver atualizacoes';
-              updBtn.addEventListener('click',e=>{
-                e.stopPropagation();hideTooltip();
-                monday.execute('openItemCard',{itemId:parseInt(sub.subId),kind:'updates'});
-              });
-              blk.appendChild(updBtn);
-            }
+
             dd.innerHTML='';
             const mkLbl=t=>{const d=document.createElement('div');d.className='dd-lbl';d.textContent=t;return d;};
             const mkSep=()=>{const d=document.createElement('div');d.className='dd-sep';return d;};
@@ -876,16 +835,7 @@ function initApp(monday){
 
           blk._subId=sub.subId;blk._person=p.person;
 
-          /* ícone de updates — só aparece quando há atualizações confirmadas */
-          if(blkH>=20 && updatesCache[sub.subId]===true){
-            const updBtn=document.createElement('button');updBtn.className='blk-upd';
-            updBtn.title='Ver atualizacoes';
-            updBtn.addEventListener('click',e=>{
-              e.stopPropagation();hideTooltip();
-              monday.execute('openItemCard',{itemId:parseInt(sub.subId),kind:'updates'});
-            });
-            blk.appendChild(updBtn);
-          }
+
 
           pdays.appendChild(blk);
         });
@@ -986,8 +936,7 @@ function initApp(monday){
       requestAnimationFrame(goToToday);
       setTimeout(goToToday,100);
       setupProgressiveScroll();
-      /* carrega updates em background sem bloquear a UI */
-      setTimeout(()=>fetchAllUpdatesBackground(),1500);
+
     }catch(err){
       document.getElementById('loading').innerHTML=`<span style="color:#ef5350">Erro: ${err.message}</span>`;console.error(err);
     }
