@@ -289,23 +289,15 @@ function initApp(monday){
     setTimeout(expand,3000);
   }
 
-  /* ─── FIX 1: fetchColumnSchema — usa subboard direto (muito mais leve) ─── */
+  /* ─── FIX 1: fetchColumnSchema ─── */
   async function fetchColumnSchema(bId){
     const key=`col_schema_${bId}`;
     if(_colSchemaCache&&_colSchemaBoardId===bId)return _colSchemaCache;
-    // cache localStorage (1h)
     try{const r=localStorage.getItem(key);if(r){const{ts,data}=JSON.parse(r);if(Date.now()-ts<3600000){_colSchemaCache=data;_colSchemaBoardId=bId;return data;}}}catch(e){}
-
-    // FIX 1a: descobre subBoardId com query leve (1 item, sem column_values)
     const r1=await apiQ(`query{boards(ids:[${bId}]){items_page(limit:1){items{subitems{board{id}}}}}}`);
     const firstItem=r1.data.boards[0].items_page.items[0];
     const subBoardId=firstItem?.subitems?.[0]?.board?.id||null;
-    if(!subBoardId){
-      console.warn('[pauta-timeline] fetchColumnSchema: nenhum subitem encontrado no 1o item');
-      return [];
-    }
-
-    // FIX 1b: busca schema diretamente do subboard (não usa items_page)
+    if(!subBoardId){console.warn('[pauta-timeline] fetchColumnSchema: nenhum subitem encontrado no 1o item');return [];}
     await sleep(200);
     const r2=await apiQ(`query{boards(ids:[${subBoardId}]){columns{id title type}}}`);
     const schema=r2.data.boards[0].columns||[];
@@ -314,15 +306,13 @@ function initApp(monday){
     return schema;
   }
 
-  /* ─── FIX 2: fetchData recebe schema como parâmetro — não refaz a query ─── */
+  /* ─── FIX 2: fetchData ─── */
   async function fetchData(bId, schema){
     const ctm={};schema.forEach(c=>ctm[c.id]=c.title);
     let allItems=[],cursor=null;
     do{
       const cp=cursor?`,cursor:"${cursor}"`:'' ;
-      // limit reduzido de 100 para 50 para diminuir complexidade por página
       const q=`query{boards(ids:[${bId}]){items_page(limit:50${cp}){cursor items{id name subitems{id name board{id} column_values{id text}}}}}}`;
-      // FIX 2: usa apiQ() com retry automático em vez de monday.api() direto
       const res=await apiQ(q);
       const page=res.data.boards[0].items_page;
       page.items.forEach(item=>item.subitems.forEach(sub=>sub._ctm=ctm));
@@ -448,7 +438,6 @@ function initApp(monday){
   /* ─── USUARIOS + FOTOS ─── */
   async function fetchUsers(){
     try{
-      // FIX: usa apiQ() com retry
       const r=await apiQ('query{users{id name photo_thumb}}');
       (r.data.users||[]).forEach(u=>{
         if(u.name){userNameById[String(u.id)]=u.name;if(u.photo_thumb)userPhotoById[u.name]=u.photo_thumb;}
@@ -485,7 +474,6 @@ function initApp(monday){
     if(btn)btn.classList.add('spinning');
     if(!silent)showToast('Atualizando...');
     try{
-      // FIX: sequencial também no refresh
       const schema=await fetchColumnSchema(currentBoardId);
       await sleep(150);
       const items=await fetchData(currentBoardId,schema);
@@ -529,7 +517,7 @@ function initApp(monday){
   document.getElementById('baccess').addEventListener('click',openAccessPanel);
 
   /* ════════════════════════════════════════
-     RENDER — idêntico ao original
+     RENDER
   ════════════════════════════════════════ */
   function render(){
     const days=getAllDays(),TOTAL=days.length;
@@ -770,7 +758,7 @@ function initApp(monday){
               const startY=e.clientY,sHs=thisHs;
               showDragTip('HS: '+sHs,e.clientX,e.clientY);
               function onM(ev){blk._pH=Math.max(1,sHs+Math.round((ev.clientY-startY)/PX_PER_HS));showDragTip('HS: '+blk._pH,ev.clientX,ev.clientY);}
-              function onU(){document.removeEventListener('mousemove',onM);document.removeEventListener('mouseup',onU);hideDragTip();if(blk._pH&&blk._pH!==sHs){const cur=sub.hsd?[...sub.hsd]:[sHs];const nw=cur.map(v=>v===sHs?blk._pH:v);pushUndo('hs',sub,sub.hsd?[...sub.hsd]:[sHs]);sub.hsd=nw;updateHSD(sub,nw);delete blk._pH;render();}}
+              function onU(){document.removeEventListener('mousemove',onM);document.removeEventListener('mouseup',onU);hideDragTip();if(blk._pH&&blk._pH!==sHs){const cur=sub.hsd?[...sub.hsd]:[];while(cur.length<=wpIdx)cur.push(defaultHs);const nw=[...cur];nw[wpIdx]=blk._pH;pushUndo('hs',sub,sub.hsd?[...sub.hsd]:[sHs]);sub.hsd=nw;updateHSD(sub,nw);delete blk._pH;render();}}
               document.addEventListener('mousemove',onM);document.addEventListener('mouseup',onU);
             });
             const rsT=document.createElement('div');rsT.className='rs-t';blk.appendChild(rsT);
@@ -779,7 +767,7 @@ function initApp(monday){
               const startY=e.clientY,sHs=thisHs;
               showDragTip('HS: '+sHs,e.clientX,e.clientY);
               function onM(ev){blk._pH=Math.max(1,sHs-Math.round((ev.clientY-startY)/PX_PER_HS));showDragTip('HS: '+blk._pH,ev.clientX,ev.clientY);}
-              function onU(){document.removeEventListener('mousemove',onM);document.removeEventListener('mouseup',onU);hideDragTip();if(blk._pH&&blk._pH!==sHs){const cur=sub.hsd?[...sub.hsd]:[sHs];const nw=cur.map(v=>v===sHs?blk._pH:v);pushUndo('hs',sub,sub.hsd?[...sub.hsd]:[sHs]);sub.hsd=nw;updateHSD(sub,nw);delete blk._pH;render();}}
+              function onU(){document.removeEventListener('mousemove',onM);document.removeEventListener('mouseup',onU);hideDragTip();if(blk._pH&&blk._pH!==sHs){const cur=sub.hsd?[...sub.hsd]:[];while(cur.length<=wpIdx)cur.push(defaultHs);const nw=[...cur];nw[wpIdx]=blk._pH;pushUndo('hs',sub,sub.hsd?[...sub.hsd]:[sHs]);sub.hsd=nw;updateHSD(sub,nw);delete blk._pH;render();}}
               document.addEventListener('mousemove',onM);document.addEventListener('mouseup',onU);
             });
           }
@@ -843,18 +831,15 @@ function initApp(monday){
   document.getElementById('btn-save-w').addEventListener('click',()=>{const i=document.getElementById('dhs');if(i)defaultHs=parseInt(i.value)||8;localStorage.setItem('default_hs_9mm',String(defaultHs));document.getElementById('weights-panel').classList.remove('open');render();});
   document.getElementById('btn-close-w').addEventListener('click',()=>document.getElementById('weights-panel').classList.remove('open'));
 
-  /* ─── FIX 3: CONTEXTO MONDAY — sequencial, sem Promise.all ─── */
+  /* ─── FIX 3: CONTEXTO MONDAY ─── */
   monday.listen('context',async res=>{
     const boardId=res.data.boardId||(res.data.boardIds&&res.data.boardIds[0]);
     const viewId=res.data.instanceId||res.data.viewId||res.data.boardViewId||res.data.appFeatureId||'';
     currentBoardId=boardId;boardFilterKey=viewId?String(viewId):(boardId?String(boardId):'9mm');
     const userName=res.data.user?.name||'',userId=String(res.data.user?.id||'');
     isMainAdmin=res.data.user?.isAdmin===true||(ADMIN_USER_ID&&userId===String(ADMIN_USER_ID));
-
-    // FIX 3: sequencial — evita esgotar o complexity budget em paralelo
     await loadSubAdmins();
     await loadRowOrder();
-
     isAdmin=isMainAdmin||subAdmins.includes(userId);
     canEditDates=isAdmin||/^Marcel\b/i.test(userName);
     if(isAdmin){
@@ -864,16 +849,13 @@ function initApp(monday){
       sortMode=localStorage.getItem('filter_sort_'+boardFilterKey)||'custom';
     }
     if(isMainAdmin)document.getElementById('baccess').style.display='inline-flex';
-
     try{
-      // FIX 3: schema primeiro (com cache localStorage), depois users, depois items
       const schema=await fetchColumnSchema(boardId);
       await sleep(200);
       await fetchUsers();
       await sleep(100);
       const items=await fetchData(boardId,schema);
       allData=processItems(items);
-
       if(!isAdmin){
         if(PARTIAL_ACCESS[userId]){selPersons=PARTIAL_ACCESS[userId];}
         else{const rn=userName||userNameById[userId]||'';selPersons=rn?[rn]:[];}
@@ -892,7 +874,6 @@ function initApp(monday){
       requestAnimationFrame(goToToday);
       setTimeout(goToToday,100);
       setupProgressiveScroll();
-
     }catch(err){
       document.getElementById('loading').innerHTML=`<span style="color:#ef5350">Erro: ${err.message}</span>`;console.error(err);
     }
