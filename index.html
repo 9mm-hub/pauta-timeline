@@ -293,11 +293,11 @@ function initApp(monday){
   async function fetchColumnSchema(bId){
     const key=`col_schema_${bId}`;
     if(_colSchemaCache&&_colSchemaBoardId===bId)return _colSchemaCache;
-    try{const r=localStorage.getItem(key);if(r){const{ts,data}=JSON.parse(r);if(Date.now()-ts<3600000){_colSchemaCache=data;_colSchemaBoardId=bId;return data;}}}catch(e){}
-    const r1=await apiQ(`query{boards(ids:[${bId}]){items_page(limit:1){items{subitems{board{id}}}}}}`);
-    const firstItem=r1.data.boards[0].items_page.items[0];
-    const subBoardId=firstItem?.subitems?.[0]?.board?.id||null;
-    if(!subBoardId){console.warn('[pauta-timeline] fetchColumnSchema: nenhum subitem encontrado no 1o item');return [];}
+    try{const r=localStorage.getItem(key);if(r){const{ts,data}=JSON.parse(r);if(Date.now()-ts<3600000&&Array.isArray(data)&&data.length){_colSchemaCache=data;_colSchemaBoardId=bId;return data;}}}catch(e){}
+    const r1=await apiQ(`query{boards(ids:[${bId}]){items_page(limit:200){items{subitems{board{id}}}}}}`);
+    const items=r1.data.boards[0].items_page.items||[];
+    const subBoardId=items.flatMap(item=>item.subitems||[]).find(sub=>sub.board?.id)?.board.id||null;
+    if(!subBoardId){console.warn('[pauta-timeline] fetchColumnSchema: nenhum subitem encontrado nos primeiros 200 itens');return [];}
     await sleep(200);
     const r2=await apiQ(`query{boards(ids:[${subBoardId}]){columns{id title type}}}`);
     const schema=r2.data.boards[0].columns||[];
@@ -899,4 +899,3 @@ function initApp(monday){
 </script>
 </body>
 </html>
-
