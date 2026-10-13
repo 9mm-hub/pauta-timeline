@@ -343,7 +343,7 @@ function initApp(monday){
       (item.subitems||[]).forEach(sub=>{
         const ctm=sub._ctm||{},cols={},colIds={};
         sub.column_values.forEach(c=>{const t=ctm[c.id]||c.id;cols[t]=c.text;colIds[t]=c.id;});
-        const resp=cols['Resp.']||cols['Responsavel']||cols['Resp']||'';
+        const resp=cols['Resp.']||cols['Responsável']||cols['Responsavel']||cols['Resp']||'';
         const cron=cols['Cronograma']||'';
         if(!resp||!cron)return;
         const range=parseRange(cron);if(!range)return;
@@ -358,7 +358,7 @@ function initApp(monday){
           subId:sub.id,boardId:sub.board?sub.board.id:null,parentId:item.id,
           cronColId:colIds['Cronograma']||null,hsdColId:colIds['HSD']||null,
           opColId:colIds['OP']||null,
-          respColId:colIds['Resp.']||colIds['Responsavel']||colIds['Resp']||null,
+          respColId:colIds['Resp.']||colIds['Responsável']||colIds['Responsavel']||colIds['Resp']||null,
           hsFallback,hsd,op,jobName:sub.name||jobName,clientCode:cc,status,range,siblings:null
         });
       });
